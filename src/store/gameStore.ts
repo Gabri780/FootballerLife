@@ -37,6 +37,8 @@ export type DynamicTeam = {
   leagueId: string;
   strength: number;
   form: number; // -5 to +5
+  prestige: number; // 1 to 5
+  yearsAtPeak: number; // Para medir ciclos de éxito
 };
 
 export type ChampionsMatch = {
@@ -186,7 +188,8 @@ const createInitialWorld = () => {
   const teams: Record<string, DynamicTeam> = {};
 
   INITIAL_TEAMS.forEach(t => {
-    teams[t.id] = { ...t, form: 0 };
+    const prestige = t.strength >= 88 ? 5 : t.strength >= 83 ? 4 : t.strength >= 78 ? 3 : t.strength >= 72 ? 2 : 1;
+    teams[t.id] = { ...t, form: 0, prestige, yearsAtPeak: 0 };
   });
 
   LEAGUES.forEach(league => {
@@ -224,7 +227,8 @@ const createInitialWorld = () => {
 
   const nationalTeams: Record<string, DynamicTeam> = {};
   NATIONAL_TEAMS.forEach(nt => {
-    nationalTeams[nt.id] = { id: nt.id, name: nt.name, leagueId: 'world', strength: nt.strength, form: 0 };
+    const prestige = nt.strength >= 88 ? 5 : nt.strength >= 83 ? 4 : nt.strength >= 78 ? 3 : nt.strength >= 72 ? 2 : 1;
+    nationalTeams[nt.id] = { id: nt.id, name: nt.name, leagueId: 'world', strength: nt.strength, form: 0, prestige, yearsAtPeak: 0 };
   });
 
   return { schedules, standings, teams, history: {}, championsHistory, domesticCupsHistory, worldCupHistory: {}, euroCupHistory: {}, seasonEvolutionReport: null, champions, domesticCups, nationalTeams };
@@ -517,42 +521,94 @@ export const useGameStore = create<GameState>()((set, get) => ({
                 return (teamB.goalsFor - teamB.goalsAgainst) - (teamA.goalsFor - teamA.goalsAgainst);
             });
 
+            const isPremier = league.id === 'eng';
+
             // Iterate over all teams to calculate evolution
             leagueTeams.forEach((id, index) => {
                const team = newTeams[id];
                const oldStrength = team.strength;
                team.form = 0; // Reset form
 
-               // Bonus for Top 4 (o Fin de Ciclo)
-               if (index < 4) {
-                 // 15% de probabilidad de "Fin de ciclo" o desmantelamiento tras el éxito
-                 if (Math.random() < 0.15) {
-                   team.strength -= (Math.floor(Math.random() * 3) + 1); // Pierden de 1 a 3 puntos
-                 } else {
-                   // Champions League boost: +1 to +3
-                   team.strength += (Math.floor(Math.random() * 3) + 1);
-                 }
-               } 
-               // Penalty for Bottom 3
-               else if (index >= leagueTeams.length - 3) {
-                 // Relegation/Crisis: -2 to -4
-                 team.strength -= (Math.floor(Math.random() * 3) + 2);
-               }
-               // Mid-table European spots (5, 6, 7) got a slight boost
-               else if (index >= 4 && index <= 6) {
-                 if (Math.random() > 0.5) team.strength += 1;
+               const isTop4 = index < 4;
+               const isRelegation = index >= leagueTeams.length - 3;
+
+               // Actualizar estado de "Ciclo"
+               if (isTop4) {
+                 team.yearsAtPeak++;
+               } else {
+                 team.yearsAtPeak = Math.max(0, team.yearsAtPeak - 1);
                }
 
-               // Regression to mean applying to new strength
-               if (team.strength > 92 && Math.random() > 0.5) {
-                   team.strength -= 1; // "Tax" for being too good (aging, complacent)
-                   if (Math.random() > 0.8) team.strength -= 1; // Severe tax
-               } else if (team.strength < 75 && Math.random() > 0.5) {
-                   team.strength += 1; // Lower teams get "new manager bounce"
-                   if (Math.random() > 0.8) team.strength += 1;
-               } else if (Math.random() > 0.6) {
-                   // More volatile mid-table (40% chance to evolve)
-                   team.strength += (Math.random() > 0.5 ? 1 : -1);
+               // === 1. SUELO Y TECHO DE PRESTIGIO ===
+               const minStrength = 65 + (team.prestige * 4); // ej: Prestige 5 -> Suelo 85. Prestige 1 -> Suelo 69.
+               
+               // === 2. EVENTOS EXTREMOS (Generación Dorada & Fuga de Talentos) ===
+               let extremeEventTriggered = false;
+
+               // Fuga de Talentos (Equipos de bajo prestigio que brillan demasiado)
+               if (team.prestige <= 3 && team.yearsAtPeak > 0 && team.strength >= 83) {
+                  // Riesgo aumenta con los años en cima y fuerza total
+                  const brainDrainRisk = 0.15 + (team.yearsAtPeak * 0.15);
+                  if (Math.random() < brainDrainRisk) {
+                     team.strength -= (Math.floor(Math.random() * 4) + 3); // Pierden de 3 a 6 puntos!
+                     team.yearsAtPeak = 0; // Proyecto reseteado
+                     extremeEventTriggered = true;
+                     eventLogs.push({ id: Date.now().toString() + Math.random(), text: `📉 Fuga de Talentos: Gigantes europeos desmantelan al sorprendente ${team.name}.`, type: 'bad' });
+                  }
+               }
+
+               // Generación Dorada (Equipos de media/baja tabla fuera de Champions con destellos)
+               if (!extremeEventTriggered && !isTop4 && team.prestige <= 3) {
+                  if (Math.random() < 0.03) { // 3% anual
+                     team.strength += (Math.floor(Math.random() * 3) + 3); // Ganan de 3 a 5 puntos!
+                     extremeEventTriggered = true;
+                     eventLogs.push({ id: Date.now().toString() + Math.random(), text: `🌟 ¡Generación Dorada! La cantera del ${team.name} brilla de pronto y el equipo se dispara.`, type: 'good' });
+                  }
+               }
+
+               // === 3. EVOLUCIÓN NORMAL ORGÁNICA ===
+               if (!extremeEventTriggered) {
+                 if (isTop4) {
+                   // Fin de Ciclo Orgánico
+                   const decayChance = 0.05 + (team.yearsAtPeak * 0.08); // Aumenta riesgo cada año en el top
+                   if (Math.random() < decayChance) {
+                     team.strength -= (Math.floor(Math.random() * 3) + 1); // Declive generacional
+                     team.yearsAtPeak = 0;
+                   } else {
+                     // Impulso base de Champions (crecimiento controlado)
+                     team.strength += (Math.floor(Math.random() * 2) + 1); // +1 a +2 max
+                   }
+                 } else if (isRelegation) {
+                   // Rescate por Prestigio (Equipos gigantes "rebotan" antes de hundirse)
+                   if (team.prestige === 5) {
+                      team.strength += 2; // "Manager bounce" inmediato usando chequera
+                   } else if (team.prestige >= 4) {
+                      team.strength -= 1; // Crisis leve
+                   } else {
+                      team.strength -= (Math.floor(Math.random() * 3) + 2); // Relegación dura -2 a -4
+                   }
+                 } else if (index >= 4 && index <= 6) {
+                   // Puestos Europa League
+                   if (Math.random() > 0.4) team.strength += 1;
+                 } else {
+                   // Media Tabla
+                   if (isPremier && Math.random() > 0.7) {
+                     team.strength += 1; // Efecto económico Premier League
+                   } else if (Math.random() > 0.6) {
+                     team.strength += (Math.random() > 0.5 ? 1 : -1); // Volatilidad normal
+                   }
+                 }
+               }
+
+               // === 4. RUBBER-BANDING Y EQUILIBRIO ===
+               // Limitador fuerte para super-equipos
+               if (team.strength > 93) {
+                   team.strength -= (Math.random() > 0.4 ? 1 : 0);
+                   if (team.strength > 96) team.strength -= 1; // Soft-cap durísimo > 96
+               }
+               // Rebote "Cenicienta" para históricos malheridos
+               if (team.strength < minStrength && Math.random() > 0.3) {
+                   team.strength += (Math.floor(Math.random() * 2) + 1); // Suben automáticamente hacia su "Suelo" natural
                }
 
                team.strength = clampStrength(team.strength);
