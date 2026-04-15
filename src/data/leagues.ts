@@ -130,3 +130,29 @@ export const TEAMS: Team[] = [
   { id: 'fra_bor', name: 'Bordeaux', leagueId: 'fra', strength: 75 }, 
   { id: 'fra_ste', name: 'Saint-Étienne', leagueId: 'fra', strength: 75 }, 
 ];
+
+export type NationalTeam = {
+  id: string;
+  name: string;
+  flag: string;
+  strength: number; // 1-100
+};
+
+export const NATIONAL_TEAMS: NationalTeam[] = [
+  { id: 'arg', name: 'Argentina', flag: '🇦🇷', strength: 96 },
+  { id: 'fra', name: 'Francia', flag: '🇫🇷', strength: 95 },
+  { id: 'bra', name: 'Brasil', flag: '🇧🇷', strength: 93 },
+  { id: 'eng', name: 'Inglaterra', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', strength: 92 },
+  { id: 'esp', name: 'España', flag: '🇪🇸', strength: 91 },
+  { id: 'por', name: 'Portugal', flag: '🇵🇹', strength: 89 },
+  { id: 'nee', name: 'Países Bajos', flag: '🇳🇱', strength: 87 },
+  { id: 'ita', name: 'Italia', flag: '🇮🇹', strength: 86 },
+  { id: 'ger', name: 'Alemania', flag: '🇩🇪', strength: 86 },
+  { id: 'bel', name: 'Bélgica', flag: '🇧🇪', strength: 85 },
+  { id: 'uru', name: 'Uruguay', flag: '🇺🇾', strength: 84 },
+  { id: 'cro', name: 'Croacia', flag: '🇭🇷', strength: 83 },
+  { id: 'col', name: 'Colombia', flag: '🇨🇴', strength: 82 },
+  { id: 'mor', name: 'Marruecos', flag: '🇲🇦', strength: 81 },
+  { id: 'jap', name: 'Japón', flag: '🇯🇵', strength: 80 },
+  { id: 'usa', name: 'Estados Unidos', flag: '🇺🇸', strength: 79 },
+];

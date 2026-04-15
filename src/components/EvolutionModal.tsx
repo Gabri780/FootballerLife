@@ -2,25 +2,52 @@ import React, { useState } from 'react';
 import { Modal, StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
 import { useGameStore } from '../store/gameStore';
 import { TEAMS, LEAGUES } from '../data/leagues';
-import { TrendingUp, TrendingDown, ArrowRight } from 'lucide-react-native';
+import { TrendingUp, TrendingDown, ArrowRight, Minus } from 'lucide-react-native';
 
 export const EvolutionModal = () => {
-  const { seasonEvolutionReport, clearEvolutionReport, player } = useGameStore();
+  const { seasonEvolutionReport, clearEvolutionReport, player, history, teams } = useGameStore();
   const [activeLeague, setActiveLeague] = useState('all');
 
   if (!seasonEvolutionReport) return null;
 
-  // Filter report based on league
-  const filteredReport = activeLeague === 'all' 
-    ? seasonEvolutionReport 
-    : seasonEvolutionReport.filter(rep => TEAMS.find(t => t.id === rep.teamId)?.leagueId === activeLeague);
+  const lastSeasonAge = player.age - 1;
+  const lastSeasonStandings = history[lastSeasonAge];
 
-  // Sort report: Highest upgrades first, then biggest downgrades
-  const sortedReport = [...filteredReport].sort((a, b) => {
-    const diffA = a.newStrength - a.oldStrength;
-    const diffB = b.newStrength - b.oldStrength;
-    return diffB - diffA; // Descending order (+3, +2, ..., -1, -2)
-  });
+  if (!lastSeasonStandings) return null;
+
+  // Function to get top 10 teams of a league from last season
+  const getTop10Evolution = (leagueId: string) => {
+    const leagueStandings = lastSeasonStandings[leagueId];
+    if (!leagueStandings) return [];
+
+    const sortedIds = Object.keys(leagueStandings).sort((a, b) => {
+      const sA = leagueStandings[a];
+      const sB = leagueStandings[b];
+      if (sB.points !== sA.points) return sB.points - sA.points;
+      return (sB.goalsFor - sB.goalsAgainst) - (sA.goalsFor - sA.goalsAgainst);
+    }).slice(0, 10);
+
+    return sortedIds.map(id => {
+      const evolution = seasonEvolutionReport.find(rep => rep.teamId === id);
+      const currentTeam = teams[id];
+      return {
+        teamId: id,
+        name: TEAMS.find(t => t.id === id)?.name || 'Team',
+        oldStrength: evolution ? evolution.oldStrength : currentTeam.strength,
+        newStrength: currentTeam.strength,
+        leagueId
+      };
+    });
+  };
+
+  let displayData: any[] = [];
+  if (activeLeague === 'all') {
+    LEAGUES.forEach(l => {
+      displayData = [...displayData, ...getTop10Evolution(l.id)];
+    });
+  } else {
+    displayData = getTop10Evolution(activeLeague);
+  }
 
   return (
     <Modal visible={true} animationType="slide" transparent={true}>
@@ -28,7 +55,7 @@ export const EvolutionModal = () => {
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
             <Text style={styles.title}>Evolución del Mundo</Text>
-            <Text style={styles.subtitle}>Fin de la Temporada (Edad {player.age - 1})</Text>
+            <Text style={styles.subtitle}>Evolución Top 10 • Temporada Finalizada (Edad {lastSeasonAge})</Text>
           </View>
 
           {/* League Filters */}
@@ -46,47 +73,52 @@ export const EvolutionModal = () => {
                 onPress={() => setActiveLeague(league.id)}
               >
                 <Text style={[styles.filterText, activeLeague === league.id && styles.activeFilterText]}>
-                  {league.country} {league.name.split(' ')[0]} {/* Short name */}
+                  {league.country} {league.name.split(' ')[0]}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
 
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-            {sortedReport.length > 0 ? (
-              sortedReport.map((rep) => {
-                const diff = rep.newStrength - rep.oldStrength;
-                const isPositive = diff > 0;
-                const team = TEAMS.find(t => t.id === rep.teamId);
+            {displayData.map((item, index) => {
+              const diff = item.newStrength - item.oldStrength;
+              const isPositive = diff > 0;
+              const isNegative = diff < 0;
 
-                return (
-                  <View key={rep.teamId} style={styles.row}>
-                    <View style={styles.teamInfo}>
-                      <Text style={styles.teamName} numberOfLines={1}>{team?.name}</Text>
-                    </View>
+              return (
+                <View key={`${item.teamId}-${index}`} style={[styles.row, activeLeague === 'all' && index % 10 === 0 && index !== 0 && styles.leagueSeparator]}>
+                  <View style={styles.teamInfo}>
+                    <Text style={styles.teamName} numberOfLines={1}>{item.name}</Text>
+                    {activeLeague === 'all' && (
+                        <Text style={styles.leagueLabel}>{LEAGUES.find(l => l.id === item.leagueId)?.name}</Text>
+                    )}
+                  </View>
+                  
+                  <View style={styles.statsInfo}>
+                    <Text style={styles.oldStat}>{item.oldStrength}</Text>
+                    <ArrowRight size={14} color="#71717a" style={styles.arrow} />
+                    <Text style={[styles.newStat, isPositive ? styles.positiveText : isNegative ? styles.negativeText : styles.neutralText]}>
+                      {item.newStrength}
+                    </Text>
                     
-                    <View style={styles.statsInfo}>
-                      <Text style={styles.oldStat}>{rep.oldStrength}</Text>
-                      <ArrowRight size={14} color="#71717a" style={styles.arrow} />
-                      <Text style={[styles.newStat, isPositive ? styles.positiveText : styles.negativeText]}>
-                        {rep.newStrength}
+                    <View style={[
+                        styles.badge, 
+                        isPositive ? styles.positiveBadge : isNegative ? styles.negativeBadge : styles.neutralBadge
+                    ]}>
+                      {isPositive ? <TrendingUp size={12} color="#10b981" /> : 
+                       isNegative ? <TrendingDown size={12} color="#ef4444" /> : 
+                       <Minus size={12} color="#71717a" />}
+                      <Text style={[
+                          styles.badgeText, 
+                          isPositive ? styles.positiveText : isNegative ? styles.negativeText : styles.neutralText
+                      ]}>
+                        {isPositive ? `+${diff}` : diff === 0 ? '0' : diff}
                       </Text>
-                      
-                      <View style={[styles.badge, isPositive ? styles.positiveBadge : styles.negativeBadge]}>
-                        {isPositive ? <TrendingUp size={12} color="#10b981" /> : <TrendingDown size={12} color="#ef4444" />}
-                        <Text style={[styles.badgeText, isPositive ? styles.positiveText : styles.negativeText]}>
-                          {isPositive ? `+${diff}` : diff}
-                        </Text>
-                      </View>
                     </View>
                   </View>
-                );
-              })
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No hubo cambios significativos en esta liga.</Text>
-              </View>
-            )}
+                </View>
+              );
+            })}
           </ScrollView>
 
           <View style={styles.footer}>
@@ -103,7 +135,7 @@ export const EvolutionModal = () => {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'center',
     padding: 20,
     paddingTop: 60,
@@ -126,13 +158,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#fff',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   subtitle: {
     color: '#a1a1aa',
-    fontSize: 14,
+    fontSize: 12,
     marginTop: 4,
+    textAlign: 'center',
   },
   filtersContainer: {
     backgroundColor: '#09090b',
@@ -152,7 +185,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#27272a',
   },
   activeFilterBtn: {
-    backgroundColor: '#3f3f46',
+    backgroundColor: '#3b82f6',
   },
   filterText: {
     color: '#a1a1aa',
@@ -173,9 +206,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
+    padding: 10,
     backgroundColor: '#27272a',
     borderRadius: 12,
+  },
+  leagueSeparator: {
+    marginTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#3f3f46',
   },
   teamInfo: {
     flex: 1,
@@ -185,6 +223,10 @@ const styles = StyleSheet.create({
     color: '#e4e4e7',
     fontSize: 14,
     fontWeight: '600',
+  },
+  leagueLabel: {
+    color: '#71717a',
+    fontSize: 10,
   },
   statsInfo: {
     flexDirection: 'row',
@@ -209,6 +251,9 @@ const styles = StyleSheet.create({
   negativeText: {
     color: '#ef4444',
   },
+  neutralText: {
+    color: '#71717a',
+  },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -216,6 +261,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
     gap: 2,
+    minWidth: 40,
+    justifyContent: 'center',
   },
   positiveBadge: {
     backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -223,17 +270,12 @@ const styles = StyleSheet.create({
   negativeBadge: {
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
   },
+  neutralBadge: {
+    backgroundColor: 'rgba(113, 113, 122, 0.1)',
+  },
   badgeText: {
     fontSize: 11,
     fontWeight: 'bold',
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: '#71717a',
-    textAlign: 'center',
   },
   footer: {
     padding: 16,

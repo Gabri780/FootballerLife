@@ -57,13 +57,13 @@ const simulateGoals = (expectedGoals: number): number => {
 };
 
 // Advanced Non-Linear Engine
-export const simulateMatch = (homeStrength: number, homeForm: number, awayStrength: number, awayForm: number): [number, number] => {
+export const simulateMatch = (homeStrength: number, homeForm: number, awayStrength: number, awayForm: number, neutral: boolean = false): [number, number] => {
   // Base effective strength summing base stats + current morale/form
   const effectiveHome = homeStrength + homeForm;
   const effectiveAway = awayStrength + awayForm;
 
   // Home advantage is statistically worth about ~1.5 to 2.5 rating points depending on the crowd
-  const homeAdvantage = 2; 
+  const homeAdvantage = neutral ? 0 : 2; 
 
   const diff = (effectiveHome + homeAdvantage) - effectiveAway;
   
