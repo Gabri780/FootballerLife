@@ -46,6 +46,8 @@ export type ChampionsMatch = {
   awayId: string;
   homeGoals: number;
   awayGoals: number;
+  homePens?: number;
+  awayPens?: number;
   homeAgg?: number;
   awayAgg?: number;
   isSecondLeg?: boolean;
@@ -68,6 +70,8 @@ export type CupMatch = {
   awayId: string;
   homeGoals: number;
   awayGoals: number;
+  homePens?: number;
+  awayPens?: number;
   winner: string;
 };
 
@@ -103,7 +107,7 @@ interface GameState {
   // Actions
   initializePlayer: () => void;
   advanceMatch: () => void;
-  advanceSeason: () => void;
+  advanceSeason: () => Promise<void>;
   clearEvolutionReport: () => void;
   addLog: (text: string, type?: EventLog['type']) => void;
 }
@@ -365,14 +369,15 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
             if (isFinal) {
               if (hG === aG) {
-                 if (Math.random() > 0.5) penaltiesH = 1; else penaltiesA = 1;
-                 displayPens = " (P)";
+                 penaltiesH = 5; penaltiesA = 4;
+                 if (Math.random() > 0.5) [penaltiesH, penaltiesA] = [4, 5];
+                 displayPens = ` (${penaltiesH}-${penaltiesA} P)`;
               }
-              const finalWinner = (hG + penaltiesH > aG + penaltiesA) ? hId : aId;
+              const finalWinner = (penaltiesH > penaltiesA || (penaltiesH === 0 && hG > aG)) ? hId : aId;
               
               eventLogs.push({
                  id: Date.now().toString() + Math.random(),
-                 text: `🌟 FINAL CHAMPIONS: ${hTeam.name} ${hG + penaltiesH} - ${aG + penaltiesA} ${aTeam.name}${displayPens} 🌟`,
+                 text: `🌟 FINAL CHAMPIONS: ${hTeam.name} ${hG} - ${aG} ${aTeam.name}${displayPens} 🌟`,
                  type: 'good'
               });
               newChampions.champion = finalWinner;
@@ -380,8 +385,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
               round.results.push({
                 homeId: hId,
                 awayId: aId,
-                homeGoals: hG + penaltiesH,
-                awayGoals: aG + penaltiesA
+                homeGoals: hG,
+                awayGoals: aG,
+                homePens: penaltiesH > 0 ? penaltiesH : undefined,
+                awayPens: penaltiesA > 0 ? penaltiesA : undefined
               });
             } else if (champSched.isSecondLeg) {
               const firstLeg = round.results[i];
@@ -390,30 +397,36 @@ export const useGameStore = create<GameState>()((set, get) => ({
                 const totalAwayAggregate = firstLeg.homeGoals + finalAwayGoals; 
                 
                 if (totalHomeAggregate === totalAwayAggregate) {
-                   if (Math.random() > 0.5) penaltiesH = 1; else penaltiesA = 1;
-                   displayPens = " (P)";
+                   penaltiesH = 5; penaltiesA = 4;
+                   if (Math.random() > 0.5) [penaltiesH, penaltiesA] = [4, 5];
+                   displayPens = ` (${penaltiesH}-${penaltiesA} P)`;
                 }
 
                 round.results.push({
                   homeId: hId,
                   awayId: aId,
-                  homeGoals: hG + penaltiesH,
-                  awayGoals: aG + penaltiesA,
-                  homeAgg: totalHomeAggregate + penaltiesH,
-                  awayAgg: totalAwayAggregate + penaltiesA,
+                  homeGoals: hG,
+                  awayGoals: aG,
+                  homePens: penaltiesH > 0 ? penaltiesH : undefined,
+                  awayPens: penaltiesA > 0 ? penaltiesA : undefined,
+                  homeAgg: totalHomeAggregate,
+                  awayAgg: totalAwayAggregate,
                   isSecondLeg: true
                 });
 
-                if (totalHomeAggregate + penaltiesH > totalAwayAggregate + penaltiesA) {
+                if (penaltiesH > penaltiesA || (penaltiesH === 0 && totalHomeAggregate > totalAwayAggregate)) {
                    nextRoundParticipants.push(hId);
                 } else {
                    nextRoundParticipants.push(aId);
                 }
 
+                const finalAggH = totalHomeAggregate;
+                const finalAggA = totalAwayAggregate;
+
                 if (player.teamId === hId || player.teamId === aId) {
                    eventLogs.push({
                      id: Date.now().toString() + Math.random(),
-                     text: `🏆 CHAMPIONS (${round.name} Vuelta): ${hTeam.name} ${hG + penaltiesH} - ${aG + penaltiesA} ${aTeam.name}${displayPens} (Global: ${totalHomeAggregate + penaltiesH}-${totalAwayAggregate + penaltiesA})`,
+                     text: `🏆 CHAMPIONS (${round.name} Vuelta): ${hTeam.name} ${hG} - ${aG} ${aTeam.name}${displayPens} (Global: ${finalAggH}-${finalAggA})`,
                      type: 'good'
                    });
                 }
@@ -461,18 +474,23 @@ export const useGameStore = create<GameState>()((set, get) => ({
                       let [hG, aG] = simulateMatch(hTeam.strength, hTeam.form, aTeam.strength, aTeam.form, cupRoundIndex === 3);
                       
                       // Penalties for cup single-leg
-                      let penalties = "";
+                      let pH = 0;
+                      let pA = 0;
+                      let penaltiesStr = "";
                       if (hG === aG) {
-                          if (Math.random() > 0.5) { hG++; penalties = " (P)"; }
-                          else { aG++; penalties = " (P)"; }
+                          pH = 5; pA = 4;
+                          if (Math.random() > 0.5) [pH, pA] = [4, 5];
+                          penaltiesStr = ` (${pH}-${pA} P)`;
                       }
 
-                      const row = {
+                      const row: CupMatch = {
                           homeId: match.homeId,
                           awayId: match.awayId,
                           homeGoals: hG,
                           awayGoals: aG,
-                          winner: hG > aG ? match.homeId : match.awayId
+                          homePens: pH > 0 ? pH : undefined,
+                          awayPens: pA > 0 ? pA : undefined,
+                          winner: (pH > pA || (pH === 0 && hG > aG)) ? match.homeId : match.awayId
                       };
                       round.results.push(row);
                       winners.push(row.winner);
@@ -480,8 +498,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
                       if (player.teamId === match.homeId || player.teamId === match.awayId) {
                           eventLogs.push({
                               id: Date.now().toString() + Math.random(),
-                              text: `🏆 ${cup.name} (${round.name}): ${hTeam.name} ${hG} - ${aG} ${aTeam.name}${penalties}`,
-                              type: hG > aG ? (player.teamId === match.homeId ? 'good' : 'bad') : (player.teamId === match.awayId ? 'good' : 'bad')
+                              text: `🏆 ${cup.name} (${round.name}): ${hTeam.name} ${hG} - ${aG} ${aTeam.name}${penaltiesStr}`,
+                              type: row.winner === player.teamId ? 'good' : 'bad'
                           });
                       }
                   });
@@ -642,11 +660,14 @@ export const useGameStore = create<GameState>()((set, get) => ({
               const loseId = isHomeWinner ? finalMatch.awayId : finalMatch.homeId;
               const winG = isHomeWinner ? finalMatch.homeGoals : finalMatch.awayGoals;
               const loseG = isHomeWinner ? finalMatch.awayGoals : finalMatch.homeGoals;
+              const winPens = isHomeWinner ? (finalMatch.homePens || 0) : (finalMatch.awayPens || 0);
+              const losePens = isHomeWinner ? (finalMatch.awayPens || 0) : (finalMatch.homePens || 0);
+              const pensStr = winPens > 0 ? ` (${winPens}-${losePens} P)` : "";
 
               newChampionsHistory[currentAge - 1] = {
                  winnerId: winId,
                  runnerUpId: loseId,
-                 score: `${winG}-${loseG}`
+                 score: `${winG}-${loseG}${pensStr}`
               };
            }
         }
@@ -845,8 +866,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
     });
   },
 
-  advanceSeason: () => {
+  advanceSeason: async () => {
     for (let i = 0; i < 38; i++) {
+      await new Promise(resolve => setTimeout(resolve, 0));
       get().advanceMatch();
     }
   }

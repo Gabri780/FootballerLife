@@ -50,18 +50,27 @@ export const ChampionsModal = ({ visible, onClose }: Props) => {
                   return (
                     <View key={i} style={styles.matchRow}>
                       <View style={styles.teamContainer}>
-                        <Text style={[styles.teamName, result.homeGoals > result.awayGoals && styles.winner]}>{hTeam}</Text>
+                        <Text style={[
+                          styles.teamName, 
+                          (result.homeGoals > result.awayGoals || (result.homePens !== undefined && result.homePens > (result.awayPens || 0))) && styles.winner
+                        ]}>{hTeam}</Text>
                       </View>
                       
                       <View style={styles.scoreContainer}>
-                        <Text style={styles.scoreText}>{result.homeGoals} - {result.awayGoals}</Text>
+                        <Text style={styles.scoreText}>
+                          {result.homeGoals} - {result.awayGoals}
+                          {result.homePens !== undefined && <Text style={styles.pensText}> ({result.homePens}-{result.awayPens} P)</Text>}
+                        </Text>
                         {result.isSecondLeg && result.homeAgg !== undefined && (
                            <Text style={styles.aggText}>(Agg: {result.homeAgg}-{result.awayAgg})</Text>
                         )}
                       </View>
 
                       <View style={styles.teamContainerRight}>
-                        <Text style={[styles.teamNameRight, result.awayGoals > result.homeGoals && styles.winner]}>{aTeam}</Text>
+                        <Text style={[
+                          styles.teamNameRight, 
+                          (result.awayGoals > result.homeGoals || (result.awayPens !== undefined && result.awayPens > (result.homePens || 0))) && styles.winner
+                        ]}>{aTeam}</Text>
                       </View>
                     </View>
                   );
@@ -174,6 +183,11 @@ const styles = StyleSheet.create({
     color: '#a1a1aa',
     fontSize: 10,
     marginTop: 2,
+  },
+  pensText: {
+    color: '#fbbf24',
+    fontSize: 12,
+    fontWeight: '500',
   },
   emptyState: {
     alignItems: 'center',

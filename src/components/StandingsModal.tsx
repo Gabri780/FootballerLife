@@ -122,6 +122,9 @@ export const StandingsModal = ({ visible, onClose }: Props) => {
                                   <Text style={[styles.cupTeam, result?.winner === m.homeId && styles.winner]}>{hTeam}</Text>
                                   <View style={styles.cupScoreBox}>
                                       <Text style={styles.cupScoreText}>{result ? `${result.homeGoals}-${result.awayGoals}` : 'vs'}</Text>
+                                      {result?.homePens !== undefined && (
+                                        <Text style={styles.cupPensText}>({result.homePens}-{result.awayPens} P)</Text>
+                                      )}
                                   </View>
                                   <Text style={[styles.cupTeam, { textAlign: 'right' }, result?.winner === m.awayId && styles.winner]}>{aTeam}</Text>
                               </View>
@@ -286,6 +289,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  cupPensText: {
+    color: '#fbbf24',
+    fontSize: 10,
+    fontWeight: '600',
   },
   cupWinnerCard: {
     margin: 16,
