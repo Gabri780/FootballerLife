@@ -15,6 +15,8 @@ export type PlayerData = {
   age: number;
   matchesPlayed: number; // 38 matches = 1 year
   teamId: string;
+  country?: string;
+  position?: string;
 };
 
 export type StandingRecord = {
@@ -114,6 +116,7 @@ interface GameState {
   addLog: (text: string, type?: EventLog['type']) => void;
   resetGame: () => Promise<void>;
   hasSavedGame: () => Promise<boolean>;
+  createPlayer: (name: string, country: string, position: string, teamId: string) => Promise<void>;
 }
 
 const FIRST_NAMES = ['Carlos', 'João', 'Mateo', 'Lucas', 'Lamine', 'Jude', 'Kylian', 'Alejandro', 'Enzo', 'Gavi'];
@@ -893,6 +896,26 @@ export const useGameStore = create<GameState>()(
       hasSavedGame: async () => {
         const saved = await AsyncStorage.getItem('footballerlife-storage');
         return saved !== null;
+      },
+
+      createPlayer: async (name, country, position, teamId) => {
+        await AsyncStorage.removeItem('footballerlife-storage');
+        set({
+          ...createInitialWorld(),
+          player: {
+            name,
+            age: 18,
+            matchesPlayed: 0,
+            teamId,
+            country,
+            position,
+          },
+          logs: [{ 
+            id: Date.now().toString(), 
+            text: `¡Bienvenido ${name}! Comienza tu carrera en el fútbol.`, 
+            type: 'info' 
+          }],
+        });
       }
     }),
     {

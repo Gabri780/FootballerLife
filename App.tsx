@@ -8,18 +8,52 @@ import { HistoryModal } from './src/components/HistoryModal';
 import { EvolutionModal } from './src/components/EvolutionModal';
 import { RankingModal } from './src/components/RankingModal';
 import { ChampionsModal } from './src/components/ChampionsModal';
+import { HomeScreen } from './src/screens/HomeScreen';
+import { CreateCharacterScreen } from './src/screens/CreateCharacterScreen';
+import { ChooseClubScreen } from './src/screens/ChooseClubScreen';
 import { TEAMS } from './src/data/leagues';
 
 const { width } = Dimensions.get('window');
 
 export default function App() {
-  const { player, logs, advanceMatch, advanceSeason } = useGameStore();
+  const [currentScreen, setCurrentScreen] = useState<'home' | 'create' | 'club' | 'game'>('home');
+  const [pendingPlayer, setPendingPlayer] = useState<{ name: string, country: string, position: string } | null>(null);
+  const { player, logs, advanceMatch, advanceSeason, createPlayer } = useGameStore();
   const [showStandings, setShowStandings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showRanking, setShowRanking] = useState(false);
   const [showChampions, setShowChampions] = useState(false);
 
   const teamName = TEAMS.find(t => t.id === player.teamId)?.name || 'Club';
+
+  if (currentScreen === 'home') {
+    return <HomeScreen 
+      onStart={() => setCurrentScreen('game')} 
+      onNewGame={() => setCurrentScreen('create')} 
+    />;
+  }
+
+  if (currentScreen === 'create') {
+    return <CreateCharacterScreen 
+      onBack={() => setCurrentScreen('home')} 
+      onNext={(data) => {
+        setPendingPlayer(data);
+        setCurrentScreen('club');
+      }} 
+    />;
+  }
+
+  if (currentScreen === 'club' && pendingPlayer) {
+    return <ChooseClubScreen 
+      playerData={pendingPlayer} 
+      onBack={() => setCurrentScreen('create')} 
+      onConfirm={async (teamId) => {
+        await createPlayer(pendingPlayer.name, pendingPlayer.country, pendingPlayer.position, teamId);
+        setPendingPlayer(null);
+        setCurrentScreen('game');
+      }} 
+    />;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
