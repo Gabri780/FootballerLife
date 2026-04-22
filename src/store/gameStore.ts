@@ -142,11 +142,16 @@ const generateChampionsParticipants = (standings?: Record<string, Record<string,
     return [...getTop('eng', 4), ...getTop('esp', 4), ...getTop('ita', 4), ...getTop('ger', 2), ...getTop('fra', 2)];
   } else {
     const getTop = (lId: string, n: number) => {
+      if (!standings[lId]) return [];
       const sorted = Object.keys(standings[lId]).sort((a, b) => {
         const tA = standings[lId][a];
         const tB = standings[lId][b];
+        if (!tA || !tB) return 0;
         if (tB.points !== tA.points) return tB.points - tA.points;
-        return (tB.goalsFor - tB.goalsAgainst) - (tA.goalsFor - tA.goalsAgainst);
+        const gdB = tB.goalsFor - tB.goalsAgainst;
+        const gdA = tA.goalsFor - tA.goalsAgainst;
+        if (gdB !== gdA) return gdB - gdA;
+        return tB.goalsFor - tA.goalsFor; // Desempate por goles a favor
       });
       return sorted.slice(0, n);
     };
@@ -225,12 +230,20 @@ const createInitialWorld = () => {
   const championsHistory: Record<number, { winnerId: string, runnerUpId: string, score: string }> = {};
   const domesticCupsHistory: Record<number, Record<string, string>> = {};
 
+  const CUP_NAMES: Record<string, string> = {
+    'eng': 'FA Cup',
+    'esp': 'Copa del Rey',
+    'ita': 'Coppa Italia',
+    'ger': 'DFB-Pokal',
+    'fra': 'Coupe de France',
+  };
+
   const domesticCups: Record<string, DomesticCup> = {};
   LEAGUES.forEach(league => {
     const leagueTeams = INITIAL_TEAMS.filter(t => t.leagueId === league.id).slice(0, 16).map(t => t.id);
     domesticCups[league.id] = {
       leagueId: league.id,
-      name: `Copa de ${league.name === 'Premier League' ? 'Inglaterra' : league.name === 'La Liga' ? 'España' : 'Liga'}`,
+      name: CUP_NAMES[league.id] || `Copa ${league.name}`,
       rounds: [generateCupRound(leagueTeams, "Octavos de Final")],
       champion: null
     };
@@ -557,6 +570,7 @@ export const useGameStore = create<GameState>()(
                 team.form = 0; // Reset form
 
                 const isTop4 = index < 4;
+                const isTop2 = index < 2;
                 const isRelegation = index >= leagueTeams.length - 3;
 
                 // Actualizar estado de "Ciclo"
@@ -564,6 +578,22 @@ export const useGameStore = create<GameState>()(
                   team.yearsAtPeak++;
                 } else {
                   team.yearsAtPeak = Math.max(0, team.yearsAtPeak - 1);
+                }
+
+                // === 0. EVOLUCIÓN DINÁMICA DEL PRESTIGIO ===
+                // El prestige sube si el equipo lleva 3+ años consecutivos en top 2
+                if (isTop2 && team.yearsAtPeak >= 3 && team.prestige < 5) {
+                  if (Math.random() < 0.35) { // 35% de probabilidad cada año de cumplir el umbral
+                    team.prestige = Math.min(5, team.prestige + 1);
+                    eventLogs.push({ id: Date.now().toString() + Math.random(), text: `⭐ ${team.name} asciende en prestigio (Prestige ${team.prestige}). ¡Un nuevo gigante europeo nace!`, type: 'good' });
+                  }
+                }
+                // El prestige baja si un equipo de prestige alto lleva 4+ años en la zona baja
+                if (isRelegation && team.yearsAtPeak === 0 && team.prestige > 2) {
+                  if (Math.random() < 0.2) { // 20% de probabilidad de perder prestigio
+                    team.prestige = Math.max(1, team.prestige - 1);
+                    eventLogs.push({ id: Date.now().toString() + Math.random(), text: `📉 ${team.name} pierde reputación histórica (Prestige ${team.prestige}). Una caída generacional.`, type: 'bad' });
+                  }
                 }
 
                 // === 1. SUELO Y TECHO DE PRESTIGIO ===
@@ -659,23 +689,29 @@ export const useGameStore = create<GameState>()(
             const nextSeasonSchedules = createInitialWorld().schedules;
             Object.assign(schedules, nextSeasonSchedules);
 
+            // Guardar standings ANTES del reset para usarlos en Champions y Copa
+            const finalSeasonStandings = JSON.parse(JSON.stringify(newStandings)) as typeof newStandings;
+
             newChampionsHistory = { ...state.championsHistory };
             if (newChampions.champion) {
-              const finalRound = newChampions.rounds[3]; // Final
-              const finalMatch = finalRound.results[0];
+              // Buscar la final en cualquier índice (puede no ser siempre el 3 si alguna ronda falló)
+              const finalRound = newChampions.rounds.find(r => r.name === 'Final');
+              const finalMatch = finalRound?.results[0];
               if (finalMatch) {
-                const isHomeWinner = finalMatch.homeGoals > finalMatch.awayGoals;
-                const winId = isHomeWinner ? finalMatch.homeId : finalMatch.awayId;
-                const loseId = isHomeWinner ? finalMatch.awayId : finalMatch.homeId;
-                const winG = isHomeWinner ? finalMatch.homeGoals : finalMatch.awayGoals;
-                const loseG = isHomeWinner ? finalMatch.awayGoals : finalMatch.homeGoals;
-                const winPens = isHomeWinner ? (finalMatch.homePens || 0) : (finalMatch.awayPens || 0);
-                const losePens = isHomeWinner ? (finalMatch.awayPens || 0) : (finalMatch.homePens || 0);
+                const homeWinsByGoals = finalMatch.homeGoals > finalMatch.awayGoals;
+                const homeWinsByPens = (finalMatch.homePens || 0) > (finalMatch.awayPens || 0);
+                const winnerIsHome = homeWinsByGoals || (finalMatch.homeGoals === finalMatch.awayGoals && homeWinsByPens);
+                const winnerId = winnerIsHome ? finalMatch.homeId : finalMatch.awayId;
+                const loserId = winnerIsHome ? finalMatch.awayId : finalMatch.homeId;
+                const winG = winnerIsHome ? finalMatch.homeGoals : finalMatch.awayGoals;
+                const loseG = winnerIsHome ? finalMatch.awayGoals : finalMatch.homeGoals;
+                const winPens = winnerIsHome ? (finalMatch.homePens || 0) : (finalMatch.awayPens || 0);
+                const losePens = winnerIsHome ? (finalMatch.awayPens || 0) : (finalMatch.homePens || 0);
                 const pensStr = winPens > 0 ? ` (${winPens}-${losePens} P)` : "";
 
                 newChampionsHistory[currentAge - 1] = {
-                  winnerId: winId,
-                  runnerUpId: loseId,
+                  winnerId,
+                  runnerUpId: loserId,
                   score: `${winG}-${loseG}${pensStr}`
                 };
               }
@@ -690,14 +726,31 @@ export const useGameStore = create<GameState>()(
             });
             newDomesticCupsHistory[currentAge - 1] = currentCupsHistory;
 
-            const nextParticipants = generateChampionsParticipants(newStandings);
+            // Bonus de fortaleza para el campeón de la Champions (atrae jugadores top)
+            if (newChampions.champion && newTeams[newChampions.champion]) {
+              const champTeam = newTeams[newChampions.champion];
+              champTeam.strength = clampStrength(champTeam.strength + 2);
+              champTeam.prestige = Math.min(5, champTeam.prestige + (champTeam.prestige < 4 ? 1 : 0));
+              eventLogs.push({ id: Date.now().toString() + Math.random(), text: `🏆 ${champTeam.name} ficha estrellas mundiales tras ganar la Champions. +2 Fuerza.`, type: 'good' });
+            }
+
+            // Usar standings FINALES (pre-reset) para calcular los participantes correctos
+            const nextParticipants = generateChampionsParticipants(finalSeasonStandings);
             newChampions.participants = nextParticipants;
             newChampions.rounds = [generateNextRound(nextParticipants, "Octavos de Final")];
             newChampions.champion = null;
 
-            // Reset Domestic Cups
+            // Reset Domestic Cups usando el ranking final de la temporada
             LEAGUES.forEach(league => {
-              const leagueTeams = Object.keys(newStandings[league.id]).slice(0, 16); // Top 16 for next year's cup
+              // Ordenar equipos por clasificación final (no por orden de objeto)
+              const sortedTeams = Object.keys(finalSeasonStandings[league.id] || {}).sort((a, b) => {
+                const tA = finalSeasonStandings[league.id][a];
+                const tB = finalSeasonStandings[league.id][b];
+                if (!tA || !tB) return 0;
+                if (tB.points !== tA.points) return tB.points - tA.points;
+                return (tB.goalsFor - tB.goalsAgainst) - (tA.goalsFor - tA.goalsAgainst);
+              });
+              const leagueTeams = sortedTeams.slice(0, 16); // Top 16 clasificados para copa
               newDomesticCups[league.id] = {
                 leagueId: league.id,
                 name: newDomesticCups[league.id].name,
@@ -785,8 +838,10 @@ export const useGameStore = create<GameState>()(
               eventLogs.push({ id: Date.now().toString() + Math.random(), text: `🇪🇺🏆 ¡EUROCOPA EN JUEGO! 🏆🇪🇺`, type: 'info' });
 
               const euroTeamIds = ['fra', 'eng', 'esp', 'por', 'nee', 'ita', 'ger', 'bel', 'cro'];
+              // Filtrar solo los IDs que existen en el estado dinámico de selecciones (evita crashes)
+              const validEuroIds = euroTeamIds.filter(id => !!newNationalTeams[id]);
               // Simular un torneo relámpago de 8 equipos europeos más fuertes
-              const participantsIds = euroTeamIds.sort((a, b) => newNationalTeams[b].strength - newNationalTeams[a].strength).slice(0, 8);
+              const participantsIds = validEuroIds.sort((a, b) => newNationalTeams[b].strength - newNationalTeams[a].strength).slice(0, 8);
               let roundTeams = [...participantsIds];
 
               // Cuartos (8 -> 4), Semis (4 -> 2), Final (2 -> 1)
@@ -870,9 +925,7 @@ export const useGameStore = create<GameState>()(
             champions: newChampions,
             domesticCups: newDomesticCups,
             nationalTeams: newNationalTeams,
-            logs: matchesPlayed % 38 === 0
-              ? eventLogs.reverse()
-              : [...eventLogs.reverse(), ...logs].slice(0, 100)
+            logs: [...eventLogs.reverse(), ...logs].slice(0, 100)
           };
         });
       },
@@ -910,10 +963,10 @@ export const useGameStore = create<GameState>()(
             country,
             position,
           },
-          logs: [{ 
-            id: Date.now().toString(), 
-            text: `¡Bienvenido ${name}! Comienza tu carrera en el fútbol.`, 
-            type: 'info' 
+          logs: [{
+            id: Date.now().toString(),
+            text: `¡Bienvenido ${name}! Comienza tu carrera en el fútbol.`,
+            type: 'info'
           }],
         });
       }

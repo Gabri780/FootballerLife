@@ -27,38 +27,38 @@ export default function App() {
   const teamName = TEAMS.find(t => t.id === player.teamId)?.name || 'Club';
 
   if (currentScreen === 'home') {
-    return <HomeScreen 
-      onStart={() => setCurrentScreen('game')} 
-      onNewGame={() => setCurrentScreen('create')} 
+    return <HomeScreen
+      onStart={() => setCurrentScreen('game')}
+      onNewGame={() => setCurrentScreen('create')}
     />;
   }
 
   if (currentScreen === 'create') {
-    return <CreateCharacterScreen 
-      onBack={() => setCurrentScreen('home')} 
+    return <CreateCharacterScreen
+      onBack={() => setCurrentScreen('home')}
       onNext={(data) => {
         setPendingPlayer(data);
         setCurrentScreen('club');
-      }} 
+      }}
     />;
   }
 
   if (currentScreen === 'club' && pendingPlayer) {
-    return <ChooseClubScreen 
-      playerData={pendingPlayer} 
-      onBack={() => setCurrentScreen('create')} 
+    return <ChooseClubScreen
+      playerData={pendingPlayer}
+      onBack={() => setCurrentScreen('create')}
       onConfirm={async (teamId) => {
         await createPlayer(pendingPlayer.name, pendingPlayer.country, pendingPlayer.position, teamId);
         setPendingPlayer(null);
         setCurrentScreen('game');
-      }} 
+      }}
     />;
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
-      
+
       {/* HEADER: Player Info & Stats */}
       <View style={styles.header}>
         <View style={styles.playerInfoRow}>
@@ -104,7 +104,7 @@ export default function App() {
             <CalendarClock size={24} color="#a1a1aa" style={{ marginRight: 8 }} />
             <Text style={styles.secondaryActionText}>JORNADA</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.mainActionBtn} onPress={advanceSeason}>
             <FastForward size={28} color="#000" style={{ marginRight: 8 }} />
             <Text style={styles.mainActionText}>SIMULAR TEMP.</Text>

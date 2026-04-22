@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
 import { useGameStore } from '../store/gameStore';
 import { LEAGUES, TEAMS, NATIONAL_TEAMS } from '../data/leagues';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 
 interface Props {
   visible: boolean;
@@ -16,10 +16,12 @@ export const HistoryModal = ({ visible, onClose }: Props) => {
   const availableYears = Object.keys(history).map(Number).sort((a, b) => b - a);
   const [selectedYear, setSelectedYear] = useState<number | null>(availableYears.length > 0 ? availableYears[0] : null);
 
-  // Update selected year if it's null but years become available
-  if (selectedYear === null && availableYears.length > 0) {
-    setSelectedYear(availableYears[0]);
-  }
+  // Actualizar el año seleccionado cuando se completa la primera temporada
+  useEffect(() => {
+    if (selectedYear === null && availableYears.length > 0) {
+      setSelectedYear(availableYears[0]);
+    }
+  }, [availableYears.length]);
 
   if (!visible) return null;
 

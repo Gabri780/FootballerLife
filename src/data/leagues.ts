@@ -21,14 +21,14 @@ export const LEAGUES: League[] = [
 
 export const TEAMS: Team[] = [
   // Premier League (Status: April 2026)
-  { id: 'eng_ars', name: 'Arsenal', leagueId: 'eng', strength: 97 }, // #1 Power Ranking 2026
+  { id: 'eng_ars', name: 'Arsenal', leagueId: 'eng', strength: 95 }, // #1 Power Ranking 2026
   { id: 'eng_mci', name: 'Manchester City', leagueId: 'eng', strength: 94 }, 
-  { id: 'eng_liv', name: 'Liverpool', leagueId: 'eng', strength: 92 },
-  { id: 'eng_che', name: 'Chelsea', leagueId: 'eng', strength: 89 }, // Recovered status
+  { id: 'eng_liv', name: 'Liverpool', leagueId: 'eng', strength: 94 },
+  { id: 'eng_che', name: 'Chelsea', leagueId: 'eng', strength: 86 }, // Recovered status
   { id: 'eng_avl', name: 'Aston Villa', leagueId: 'eng', strength: 87 },
   { id: 'eng_new', name: 'Newcastle United', leagueId: 'eng', strength: 85 },
-  { id: 'eng_tot', name: 'Tottenham Hotspur', leagueId: 'eng', strength: 78 }, // Simulation Slump 2026
-  { id: 'eng_mnu', name: 'Manchester United', leagueId: 'eng', strength: 83 },
+  { id: 'eng_tot', name: 'Tottenham Hotspur', leagueId: 'eng', strength: 85 }, 
+  { id: 'eng_mnu', name: 'Manchester United', leagueId: 'eng', strength: 85 },
   { id: 'eng_bha', name: 'Brighton', leagueId: 'eng', strength: 82 },
   { id: 'eng_whu', name: 'West Ham United', leagueId: 'eng', strength: 80 },
   { id: 'eng_nfo', name: 'Nottingham Forest', leagueId: 'eng', strength: 79 },
@@ -45,11 +45,11 @@ export const TEAMS: Team[] = [
   // La Liga (Status: April 2026)
   { id: 'esp_bar', name: 'Barcelona', leagueId: 'esp', strength: 95 }, // Resurgence under Flick
   { id: 'esp_rma', name: 'Real Madrid', leagueId: 'esp', strength: 95 }, // Top Tier Contender
-  { id: 'esp_atm', name: 'Atlético Madrid', leagueId: 'esp', strength: 88 },
+  { id: 'esp_atm', name: 'Atlético Madrid', leagueId: 'esp', strength: 86 },
   { id: 'esp_ath', name: 'Athletic Club', leagueId: 'esp', strength: 86 },
   { id: 'esp_rso', name: 'Real Sociedad', leagueId: 'esp', strength: 84 },
   { id: 'esp_vil', name: 'Villarreal', leagueId: 'esp', strength: 83 },
-  { id: 'esp_gir', name: 'Girona', leagueId: 'esp', strength: 82 },
+  { id: 'esp_gir', name: 'Girona', leagueId: 'esp', strength: 80 },
   { id: 'esp_bet', name: 'Real Betis', leagueId: 'esp', strength: 82 },
   { id: 'esp_val', name: 'Valencia', leagueId: 'esp', strength: 80 },
   { id: 'esp_sev', name: 'Sevilla', leagueId: 'esp', strength: 79 },
@@ -66,8 +66,8 @@ export const TEAMS: Team[] = [
 
   // Serie A (Status: April 2026)
   { id: 'ita_int', name: 'Inter Milan', leagueId: 'ita', strength: 93 },
-  { id: 'ita_juv', name: 'Juventus', leagueId: 'ita', strength: 90 },
-  { id: 'ita_nap', name: 'Napoli', leagueId: 'ita', strength: 89 },
+  { id: 'ita_juv', name: 'Juventus', leagueId: 'ita', strength: 88 },
+  { id: 'ita_nap', name: 'Napoli', leagueId: 'ita', strength: 90 },
   { id: 'ita_ata', name: 'Atalanta', leagueId: 'ita', strength: 88 },
   { id: 'ita_mil', name: 'AC Milan', leagueId: 'ita', strength: 88 },
   { id: 'ita_laz', name: 'Lazio', leagueId: 'ita', strength: 84 },
@@ -87,10 +87,10 @@ export const TEAMS: Team[] = [
   { id: 'ita_ven', name: 'Venezia', leagueId: 'ita', strength: 73 },
 
   // Bundesliga (Status: April 2026)
-  { id: 'ger_bay', name: 'Bayern Munich', leagueId: 'ger', strength: 96 }, // Dominant 2026
-  { id: 'ger_dor', name: 'Borussia Dortmund', leagueId: 'ger', strength: 88 }, 
+  { id: 'ger_bay', name: 'Bayern Munich', leagueId: 'ger', strength: 95 }, // Dominant 2026
+  { id: 'ger_dor', name: 'Borussia Dortmund', leagueId: 'ger', strength: 85 }, 
   { id: 'ger_rbl', name: 'RB Leipzig', leagueId: 'ger', strength: 88 },
-  { id: 'ger_lev', name: 'Bayer Leverkusen', leagueId: 'ger', strength: 87 }, // Tier 2 in 2026
+  { id: 'ger_lev', name: 'Bayer Leverkusen', leagueId: 'ger', strength: 89 }, // Tier 2 in 2026
   { id: 'ger_stu', name: 'VfB Stuttgart', leagueId: 'ger', strength: 85 },
   { id: 'ger_fra', name: 'Eintracht Frankfurt', leagueId: 'ger', strength: 85 },
   { id: 'ger_hof', name: 'Hoffenheim', leagueId: 'ger', strength: 82 },
@@ -109,11 +109,11 @@ export const TEAMS: Team[] = [
   { id: 'ger_ham', name: 'Hamburger SV', leagueId: 'ger', strength: 75 }, 
 
   // Ligue 1 (Status: April 2026)
-  { id: 'fra_psg', name: 'Paris Saint-Germain', leagueId: 'fra', strength: 94 }, // Reigning UCL Champs
-  { id: 'fra_lan', name: 'Lens', leagueId: 'fra', strength: 87 }, // Strong runner up 2026
-  { id: 'fra_mon', name: 'Monaco', leagueId: 'fra', strength: 86 },
-  { id: 'fra_lyo', name: 'Olympique Lyonnais', leagueId: 'fra', strength: 86 },
-  { id: 'fra_mar', name: 'Marseille', leagueId: 'fra', strength: 86 },
+  { id: 'fra_psg', name: 'Paris Saint-Germain', leagueId: 'fra', strength: 92 }, // Reigning UCL Champs
+  { id: 'fra_lan', name: 'Lens', leagueId: 'fra', strength: 84 }, // Strong runner up 2026
+  { id: 'fra_mon', name: 'Monaco', leagueId: 'fra', strength: 84 },
+  { id: 'fra_lyo', name: 'Olympique Lyonnais', leagueId: 'fra', strength: 84 },
+  { id: 'fra_mar', name: 'Marseille', leagueId: 'fra', strength: 83 },
   { id: 'fra_lil', name: 'Lille', leagueId: 'fra', strength: 85 },
   { id: 'fra_nic', name: 'Nice', leagueId: 'fra', strength: 83 },
   { id: 'fra_ren', name: 'Rennes', leagueId: 'fra', strength: 82 },
@@ -141,17 +141,17 @@ export type NationalTeam = {
 export const NATIONAL_TEAMS: NationalTeam[] = [
   { id: 'arg', name: 'Argentina', flag: '🇦🇷', strength: 96 },
   { id: 'fra', name: 'Francia', flag: '🇫🇷', strength: 95 },
-  { id: 'bra', name: 'Brasil', flag: '🇧🇷', strength: 93 },
+  { id: 'bra', name: 'Brasil', flag: '🇧🇷', strength: 89 },
   { id: 'eng', name: 'Inglaterra', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', strength: 92 },
-  { id: 'esp', name: 'España', flag: '🇪🇸', strength: 91 },
+  { id: 'esp', name: 'España', flag: '🇪🇸', strength: 95 },
   { id: 'por', name: 'Portugal', flag: '🇵🇹', strength: 89 },
   { id: 'nee', name: 'Países Bajos', flag: '🇳🇱', strength: 87 },
-  { id: 'ita', name: 'Italia', flag: '🇮🇹', strength: 86 },
-  { id: 'ger', name: 'Alemania', flag: '🇩🇪', strength: 86 },
+  { id: 'ita', name: 'Italia', flag: '🇮🇹', strength: 88 },
+  { id: 'ger', name: 'Alemania', flag: '🇩🇪', strength: 91 },
   { id: 'bel', name: 'Bélgica', flag: '🇧🇪', strength: 85 },
-  { id: 'uru', name: 'Uruguay', flag: '🇺🇾', strength: 84 },
+  { id: 'uru', name: 'Uruguay', flag: '🇺🇾', strength: 86 },
   { id: 'cro', name: 'Croacia', flag: '🇭🇷', strength: 83 },
-  { id: 'col', name: 'Colombia', flag: '🇨🇴', strength: 82 },
+  { id: 'col', name: 'Colombia', flag: '🇨🇴', strength: 86 },
   { id: 'mor', name: 'Marruecos', flag: '🇲🇦', strength: 81 },
   { id: 'jap', name: 'Japón', flag: '🇯🇵', strength: 80 },
   { id: 'usa', name: 'Estados Unidos', flag: '🇺🇸', strength: 79 },

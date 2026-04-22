@@ -7,7 +7,7 @@ export type Country = {
 
 export const COUNTRIES: Country[] = [
   { id: 'esp', name: 'España', flag: '🇪🇸', leagueId: 'esp' },
-  { id: 'eng', name: 'Inglaterra', flag: '🏴', leagueId: 'eng' },
+  { id: 'eng', name: 'Inglaterra', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', leagueId: 'eng' },
   { id: 'fra', name: 'Francia', flag: '🇫🇷', leagueId: 'fra' },
   { id: 'ita', name: 'Italia', flag: '🇮🇹', leagueId: 'ita' },
   { id: 'ger', name: 'Alemania', flag: '🇩🇪', leagueId: 'ger' },

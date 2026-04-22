@@ -113,7 +113,8 @@ export const StandingsModal = ({ visible, onClose }: Props) => {
                   <View key={rIdx} style={styles.cupRound}>
                       <Text style={styles.cupRoundTitle}>{round.name}</Text>
                       {round.matches.map((m, mIdx) => {
-                          const result = round.results[mIdx];
+                          // Buscar el resultado por homeId para evitar desajuste por índice al regenerar rondas
+                          const result = round.results.find(r => r.homeId === m.homeId && r.awayId === m.awayId);
                           const hTeam = TEAMS.find(t => t.id === m.homeId)?.name || '...';
                           const aTeam = TEAMS.find(t => t.id === m.awayId)?.name || '...';
                           
