@@ -10,13 +10,78 @@ export type EventLog = {
   type: 'good' | 'bad' | 'neutral' | 'info';
 };
 
+export type PlayerStats = {
+  pace: number;      // ritmo
+  shooting: number;  // tiro
+  passing: number;   // pase
+  dribbling: number; // regate
+  defending: number; // defensa
+  physical: number;  // físico
+};
+
+export type MatchPerformance = {
+  matchNum: number;      // número total de partido del jugador
+  age: number;
+  opponent: string;      // nombre del equipo rival
+  isHome: boolean;
+  teamGoals: number;
+  opponentGoals: number;
+  goals: number;         // goles del jugador
+  assists: number;       // asistencias del jugador
+  rating: number;        // 0-10
+};
+
+export type SeasonHistory = {
+  age: number;              // edad que tenía el jugador esa temporada
+  teamId: string;           // club en el que jugó
+  teamName: string;         // nombre del club (por si el equipo cambia de nombre)
+  appearances: number;
+  goals: number;
+  assists: number;
+  avgRating: number;        // rating medio (0-10, 2 decimales)
+  trophies: {
+    league: boolean;        // ganó la liga
+    domesticCup: boolean;   // ganó la copa nacional
+    champions: boolean;     // ganó la Champions
+    worldCup: boolean;      // ganó el Mundial (si tocaba ese año)
+    euroCup: boolean;       // ganó la Eurocopa (si tocaba ese año)
+  };
+};
+
+export type PlayerProgressionReport = {
+  oldOverall: number;
+  newOverall: number;
+  oldStats: PlayerStats;
+  newStats: PlayerStats;
+  seasonGoals: number;
+  seasonAssists: number;
+  seasonAppearances: number;
+  seasonAvgRating: number;
+  age: number;
+};
+
 export type PlayerData = {
   name: string;
   age: number;
-  matchesPlayed: number; // 38 matches = 1 year
+  matchesPlayed: number;
   teamId: string;
   country?: string;
   position?: string;
+  overall: number;       // 60-99
+  stats: PlayerStats;
+  // Carrera acumulada
+  careerGoals: number;
+  careerAssists: number;
+  careerAppearances: number;
+  // Temporada actual
+  seasonGoals: number;
+  seasonAssists: number;
+  seasonAppearances: number;
+  seasonRatingSum: number; // para calcular el rating medio
+  // Últimos partidos (para mostrar en UI)
+  lastMatches: MatchPerformance[]; // max 10
+  seasonsHistory: SeasonHistory[];  // historial completo de temporadas
+  peakAge: number;  // edad de pico (25-29, aleatoria por jugador)
 };
 
 export type StandingRecord = {
@@ -104,6 +169,7 @@ interface GameState {
   worldCupHistory: Record<number, { winnerId: string, runnerUpId: string, score: string }>;
   euroCupHistory: Record<number, { winnerId: string, runnerUpId: string, score: string }>;
   seasonEvolutionReport: TeamEvolution[] | null;
+  playerProgressionReport: PlayerProgressionReport | null;
   champions: ChampionsState;
   domesticCups: Record<string, DomesticCup>;
   nationalTeams: Record<string, DynamicTeam>;
@@ -113,6 +179,7 @@ interface GameState {
   advanceMatch: () => void;
   advanceSeason: () => Promise<void>;
   clearEvolutionReport: () => void;
+  clearPlayerProgressionReport: () => void;
   addLog: (text: string, type?: EventLog['type']) => void;
   resetGame: () => Promise<void>;
   hasSavedGame: () => Promise<boolean>;
@@ -122,9 +189,241 @@ interface GameState {
 const FIRST_NAMES = ['Carlos', 'João', 'Mateo', 'Lucas', 'Lamine', 'Jude', 'Kylian', 'Alejandro', 'Enzo', 'Gavi'];
 const LAST_NAMES = ['García', 'Silva', 'Martínez', 'Bellingham', 'Yamal', 'Mbappé', 'Garnacho', 'Fernández', 'Pedri'];
 
+const generatePlayerStats = (position: string, clubStrength: number, country?: string): { overall: number; stats: PlayerStats } => {
+  // === LOTERÍA GENÉTICA (base) ===
+  const rand = Math.random();
+  let baseOverall: number;
+  if (rand < 0.60) {
+    // 60% buen talento: 67-70
+    baseOverall = 67 + Math.floor(Math.random() * 4);
+  } else if (rand < 0.90) {
+    // 30% gran promesa: 71-75
+    baseOverall = 71 + Math.floor(Math.random() * 5);
+  } else {
+    // 10% talento generacional: 76-80
+    baseOverall = 76 + Math.floor(Math.random() * 5);
+  }
+
+  // === MODIFICADOR POR CLUB ===
+  if (clubStrength >= 88) baseOverall += 2;
+  else if (clubStrength >= 83) baseOverall += 1;
+  else if (clubStrength < 78) baseOverall -= 1;
+
+  // === MODIFICADOR POR PAÍS ===
+  // Países con grandes canteras: Brasil, Argentina, Francia
+  const eliteFootballCountries = ['bra', 'arg', 'fra'];
+  // Países de desarrollo medio: España, Portugal, Alemania, Inglaterra, Países Bajos, Italia, Bélgica, Uruguay, Croacia
+  const midFootballCountries = ['esp', 'por', 'ger', 'eng', 'nee', 'ita', 'bel', 'uru', 'cro'];
+
+  if (country && eliteFootballCountries.includes(country)) {
+    baseOverall += 1;
+  } else if (country && !midFootballCountries.includes(country)) {
+    // Resto del mundo: -1
+    baseOverall -= 1;
+  }
+
+  // === CAP FINAL ===
+  baseOverall = Math.min(82, Math.max(58, baseOverall));
+
+  // Distribución de stats según posición
+  // Cada stat oscila ±8 del overall según la posición
+  const stats: PlayerStats = {
+    pace: baseOverall,
+    shooting: baseOverall,
+    passing: baseOverall,
+    dribbling: baseOverall,
+    defending: baseOverall,
+    physical: baseOverall,
+  };
+
+  // Ajustes por posición (la stat clave +5, las no clave -5)
+  const adjustStat = (stat: keyof PlayerStats, delta: number) => {
+    stats[stat] = Math.max(40, Math.min(85, stats[stat] + delta));
+  };
+
+  switch (position) {
+    case 'POR': // Portero: físico alto, todo lo demás bajo (no usamos stats de portero por ahora)
+      adjustStat('physical', 5);
+      adjustStat('defending', 5);
+      adjustStat('shooting', -15);
+      adjustStat('dribbling', -10);
+      break;
+    case 'DFC': // Defensa central
+      adjustStat('defending', 7);
+      adjustStat('physical', 5);
+      adjustStat('shooting', -8);
+      adjustStat('dribbling', -5);
+      break;
+    case 'LT': case 'RT': // Laterales
+      adjustStat('pace', 5);
+      adjustStat('defending', 4);
+      adjustStat('physical', 3);
+      adjustStat('shooting', -5);
+      break;
+    case 'MCD': // Pivote defensivo
+      adjustStat('defending', 5);
+      adjustStat('passing', 4);
+      adjustStat('physical', 4);
+      adjustStat('shooting', -3);
+      break;
+    case 'MC': // Mediocentro
+      adjustStat('passing', 6);
+      adjustStat('dribbling', 3);
+      adjustStat('shooting', -2);
+      break;
+    case 'MD': case 'MI': // Interiores
+      adjustStat('passing', 4);
+      adjustStat('pace', 3);
+      adjustStat('dribbling', 3);
+      break;
+    case 'EXD': case 'EXI': // Extremos
+      adjustStat('pace', 7);
+      adjustStat('dribbling', 6);
+      adjustStat('shooting', 3);
+      adjustStat('defending', -10);
+      adjustStat('physical', -3);
+      break;
+    case 'DC': // Delantero centro
+      adjustStat('shooting', 7);
+      adjustStat('physical', 4);
+      adjustStat('pace', 2);
+      adjustStat('defending', -12);
+      break;
+  }
+
+  // Recalcular overall como media ponderada de las stats relevantes (descartando physical del portero)
+  const relevantStats = position === 'POR'
+    ? [stats.physical, stats.defending]
+    : [stats.pace, stats.shooting, stats.passing, stats.dribbling, stats.defending, stats.physical];
+  const overall = Math.round(relevantStats.reduce((a, b) => a + b, 0) / relevantStats.length);
+
+  return { overall, stats };
+};
+
+const simulatePlayerPerformance = (
+  player: PlayerData,
+  teamGoals: number,
+  opponentGoals: number,
+  isHome: boolean,
+  opponentStrength: number  // NUEVO parámetro
+): { goals: number; assists: number; rating: number } => {
+  const pos = player.position || 'MC';
+  const stats = player.stats;
+  const overall = player.overall;
+
+  // === FACTOR DE DIFICULTAD POR RIVAL ===
+  // Rival strength 70 = factor 1.0 (baseline)
+  // Rival strength 90 = factor 0.55 (muy difícil marcar)
+  // Rival strength 60 = factor 1.30 (muy fácil marcar)
+  const difficultyFactor = Math.max(0.45, Math.min(1.4, 1 + ((70 - opponentStrength) * 0.025)));
+
+  // === FACTOR DE CALIDAD PROPIA ===
+  // Basado en overall: overall 70 = 1.0 baseline, overall 90 = 2.5x, overall 60 = 0.5x
+  const qualityFactor = Math.pow(1.055, overall - 70);
+
+  // === CALCULAR GOLES ===
+  // Probabilidad base esperada de gol por partido según posición (objetivo medio en 38 partidos)
+  // Se escalan con qualityFactor, difficultyFactor y afinidad por teamGoals
+  let baseGoalProb = 0;
+  if (pos === 'DC') baseGoalProb = 0.18;
+  else if (pos === 'EXD' || pos === 'EXI') baseGoalProb = 0.10;
+  else if (pos === 'MD' || pos === 'MI') baseGoalProb = 0.055;
+  else if (pos === 'MC') baseGoalProb = 0.045;
+  else if (pos === 'MCD') baseGoalProb = 0.025;
+  else if (pos === 'LT' || pos === 'RT') baseGoalProb = 0.022;
+  else if (pos === 'DFC') baseGoalProb = 0.028;
+  else if (pos === 'POR') baseGoalProb = 0.0003;
+
+  // Ajuste por stat de tiro (afina el resultado dentro de la posición)
+  const shootingMod = 1 + ((stats.shooting - 70) * 0.015);
+
+  // Afinidad por goles del equipo: si tu equipo mete 4, tienes más oportunidades
+  // pero no escala 1:1. Un partido con 0 goles del equipo = difícil marcar.
+  const teamGoalsFactor = teamGoals === 0 ? 0.2 : Math.min(1.4, 0.55 + (teamGoals * 0.2));
+
+  // Probabilidad final de marcar cada "unidad" de gol (se hace por "intentos")
+  const goalProbFinal = baseGoalProb * qualityFactor * difficultyFactor * shootingMod * teamGoalsFactor;
+
+  // Se hacen 2 intentos de gol por partido.
+  // Esto permite hat-tricks raros y partidos sin marcar.
+  let goals = 0;
+  const attempts = 2;
+  const perAttemptProb = Math.min(0.85, goalProbFinal);
+  for (let i = 0; i < attempts; i++) {
+    if (Math.random() < perAttemptProb) goals++;
+  }
+
+  // No puedes marcar más goles de los que ha metido tu equipo
+  goals = Math.min(goals, teamGoals);
+  // Cap de hat-trick razonable
+  goals = Math.min(3, goals);
+
+  // === CALCULAR ASISTENCIAS ===
+  let baseAssistProb = 0;
+  if (pos === 'MC') baseAssistProb = 0.18;   // ~7 asist/38
+  else if (pos === 'MD' || pos === 'MI') baseAssistProb = 0.16;
+  else if (pos === 'EXD' || pos === 'EXI') baseAssistProb = 0.20;
+  else if (pos === 'LT' || pos === 'RT') baseAssistProb = 0.14;
+  else if (pos === 'MCD') baseAssistProb = 0.08;
+  else if (pos === 'DC') baseAssistProb = 0.10;
+  else if (pos === 'DFC') baseAssistProb = 0.03;
+  else if (pos === 'POR') baseAssistProb = 0.005;
+
+  const passingMod = 1 + ((stats.passing - 70) * 0.012);
+
+  // Asistencias solo pueden venir de goles que NO has marcado tú
+  const goalsForAssists = teamGoals - goals;
+  let assists = 0;
+  if (goalsForAssists > 0) {
+    const assistProbFinal = baseAssistProb * qualityFactor * difficultyFactor * passingMod;
+    for (let i = 0; i < goalsForAssists; i++) {
+      if (Math.random() < assistProbFinal) assists++;
+    }
+  }
+  assists = Math.min(3, assists);
+
+  // === CALCULAR RATING 0-10 ===
+  let rating = 6.0;
+  rating += goals * 1.2;
+  rating += assists * 0.7;
+
+  // Bonus por resultado
+  if (teamGoals > opponentGoals) rating += 0.4;
+  else if (teamGoals < opponentGoals) rating -= 0.3;
+
+  // Defensas y porteros: bonus por portería a cero, malus por encajar mucho
+  const isDef = (pos === 'POR' || pos === 'DFC' || pos === 'LT' || pos === 'RT');
+  if (isDef && opponentGoals === 0) rating += 0.5;
+  if (isDef && opponentGoals >= 3) rating -= 0.6;
+
+  // Factor overall: cracks tiran del rating medio hacia arriba
+  rating += (overall - 70) * 0.025;
+
+  // Aleatoriedad (mal día / día de gala)
+  rating += (Math.random() * 0.8) - 0.4;
+
+  // Día de gala raro (3% de probabilidad): bonus adicional +1.0 a +1.5
+  if (Math.random() < 0.03) {
+    rating += 1.0 + Math.random() * 0.5;
+  }
+  // Día desastroso raro (3%): malus -0.8 a -1.3
+  if (Math.random() < 0.03) {
+    rating -= 0.8 + Math.random() * 0.5;
+  }
+
+  // Clamp
+  rating = Math.max(4.0, Math.min(10.0, rating));
+  rating = Math.round(rating * 10) / 10;
+
+  return { goals, assists, rating };
+};
+
 const generateRandomPlayer = () => {
   const name = `${FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)]} ${LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)]}`;
   const randomTeam = INITIAL_TEAMS[Math.floor(Math.random() * INITIAL_TEAMS.length)];
+  const { overall, stats } = generatePlayerStats('MC', randomTeam.strength);
+
+  const peakAge = 25 + Math.floor(Math.random() * 5); // 25-29
 
   return {
     player: {
@@ -132,6 +431,19 @@ const generateRandomPlayer = () => {
       age: 18,
       matchesPlayed: 0,
       teamId: randomTeam.id,
+      position: 'MC',
+      overall,
+      stats,
+      careerGoals: 0,
+      careerAssists: 0,
+      careerAppearances: 0,
+      seasonGoals: 0,
+      seasonAssists: 0,
+      seasonAppearances: 0,
+      seasonRatingSum: 0,
+      lastMatches: [],
+      seasonsHistory: [],
+      peakAge,
     }
   };
 };
@@ -255,11 +567,120 @@ const createInitialWorld = () => {
     nationalTeams[nt.id] = { id: nt.id, name: nt.name, leagueId: 'world', strength: nt.strength, form: 0, prestige, yearsAtPeak: 0 };
   });
 
-  return { schedules, standings, teams, history: {}, championsHistory, domesticCupsHistory, worldCupHistory: {}, euroCupHistory: {}, seasonEvolutionReport: null, champions, domesticCups, nationalTeams };
+  return { schedules, standings, teams, history: {}, championsHistory, domesticCupsHistory, worldCupHistory: {}, euroCupHistory: {}, seasonEvolutionReport: null, playerProgressionReport: null, champions, domesticCups, nationalTeams };
 };
 
 const clampForm = (val: number) => Math.max(-5, Math.min(5, val));
 const clampStrength = (val: number) => Math.max(60, Math.min(99, val)); // Permitir hasta 99 para equipos históricos y bajar hasta 60
+
+const updatePlayerProgression = (player: PlayerData): { 
+  newOverall: number; 
+  newStats: PlayerStats; 
+  progressionLog: string | null;
+  logType: 'good' | 'bad' | 'neutral';
+} => {
+  const age = player.age;
+  const peakAge = player.peakAge || 27;
+  const overall = player.overall;
+  const stats = { ...player.stats };
+  const avgRating = player.seasonAppearances > 0 
+    ? player.seasonRatingSum / player.seasonAppearances 
+    : 6.0;
+  
+  let overallDelta = 0;
+  let logType: 'good' | 'bad' | 'neutral' = 'neutral';
+  
+  // === FASE 1: JUVENTUD (18 a peakAge - 3) ===
+  if (age <= peakAge - 3) {
+    if (avgRating >= 8.0) overallDelta = 3 + Math.floor(Math.random() * 2); // +3 a +4
+    else if (avgRating >= 7.0) overallDelta = 2 + Math.floor(Math.random() * 2); // +2 a +3
+    else if (avgRating >= 6.0) overallDelta = 1 + Math.floor(Math.random() * 2); // +1 a +2
+    else overallDelta = Math.random() < 0.5 ? 0 : 1;
+  }
+  // === FASE 2: PRE-PICO (peakAge - 2 a peakAge - 1) ===
+  else if (age < peakAge) {
+    if (avgRating >= 8.0) overallDelta = 1 + Math.floor(Math.random() * 2); // +1 a +2
+    else if (avgRating >= 7.0) overallDelta = 1;
+    else overallDelta = Math.random() < 0.5 ? 0 : 1;
+  }
+  // === FASE 3: PICO (peakAge a peakAge + 1) ===
+  else if (age <= peakAge + 1) {
+    if (avgRating >= 8.5) overallDelta = Math.random() < 0.5 ? 1 : 0;
+    else overallDelta = 0;
+  }
+  // === FASE 4: DECLIVE ===
+  else if (age >= 30 && age <= 32) {
+    overallDelta = -1;
+  }
+  else if (age >= 33 && age <= 35) {
+    overallDelta = -1 - Math.floor(Math.random() * 2); // -1 o -2
+  }
+  else if (age >= 36) {
+    overallDelta = -2 - Math.floor(Math.random() * 2); // -2 o -3
+  }
+  // Edades intermedias entre peakAge+1 y 30 (por si peakAge es 29): bajada leve
+  else if (age > peakAge + 1 && age < 30) {
+    overallDelta = Math.random() < 0.5 ? 0 : -1;
+  }
+  
+  // === BONUS: si rinde muy bien en declive, frena 1 punto ===
+  if (overallDelta < 0 && avgRating >= 8.0) {
+    overallDelta = Math.min(0, overallDelta + 1);
+  }
+  
+  // === APLICAR DELTA A LAS STATS ===
+  // En juventud/pre-pico: sube todo proporcionalmente
+  // En declive: pace y physical caen más rápido, pase/tiro/regate caen menos
+  const isDeclining = overallDelta < 0;
+  const isYoung = overallDelta > 0;
+  
+  if (isYoung) {
+    // Todas las stats suben igual que el overall, con ligera variación aleatoria
+    const mainDelta = overallDelta;
+    stats.pace = Math.min(99, stats.pace + mainDelta + (Math.random() < 0.3 ? 1 : 0));
+    stats.shooting = Math.min(99, stats.shooting + mainDelta + (Math.random() < 0.3 ? 1 : 0));
+    stats.passing = Math.min(99, stats.passing + mainDelta + (Math.random() < 0.3 ? 1 : 0));
+    stats.dribbling = Math.min(99, stats.dribbling + mainDelta + (Math.random() < 0.3 ? 1 : 0));
+    stats.defending = Math.min(99, stats.defending + mainDelta + (Math.random() < 0.3 ? 1 : 0));
+    stats.physical = Math.min(99, stats.physical + mainDelta + (Math.random() < 0.3 ? 1 : 0));
+  } else if (isDeclining) {
+    // pace y physical bajan más rápido con la edad
+    stats.pace = Math.max(40, stats.pace + overallDelta - 1);
+    stats.physical = Math.max(40, stats.physical + overallDelta - (age >= 33 ? 1 : 0));
+    // tiro, pase, regate bajan menos (la técnica se mantiene)
+    stats.shooting = Math.max(40, stats.shooting + Math.ceil(overallDelta * 0.6));
+    stats.passing = Math.max(40, stats.passing + Math.ceil(overallDelta * 0.5));
+    stats.dribbling = Math.max(40, stats.dribbling + Math.ceil(overallDelta * 0.7));
+    stats.defending = Math.max(40, stats.defending + Math.ceil(overallDelta * 0.6));
+  }
+  
+  // Calcular nuevo overall como media de stats relevantes
+  const pos = player.position || 'MC';
+  const relevantStats = pos === 'POR' 
+    ? [stats.physical, stats.defending] 
+    : [stats.pace, stats.shooting, stats.passing, stats.dribbling, stats.defending, stats.physical];
+  const newOverall = Math.max(40, Math.min(99, Math.round(relevantStats.reduce((a, b) => a + b, 0) / relevantStats.length)));
+  
+  // === LOG ===
+  let progressionLog: string | null = null;
+  const actualDelta = newOverall - overall;
+  
+  if (actualDelta >= 3) {
+    progressionLog = `⭐ ¡Temporada explosiva! Tu overall sube a ${newOverall} (+${actualDelta})`;
+    logType = 'good';
+  } else if (actualDelta >= 1) {
+    progressionLog = `📈 Has mejorado esta temporada. Overall: ${newOverall} (+${actualDelta})`;
+    logType = 'good';
+  } else if (actualDelta <= -2) {
+    progressionLog = `📉 La edad te pasa factura. Tu overall baja a ${newOverall} (${actualDelta})`;
+    logType = 'bad';
+  } else if (actualDelta === -1) {
+    progressionLog = `📉 Pierdes un poco de chispa. Overall: ${newOverall} (-1)`;
+    logType = 'neutral';
+  }
+  
+  return { newOverall, newStats: stats, progressionLog, logType };
+};
 
 export const useGameStore = create<GameState>()(
   persist(
@@ -283,11 +704,24 @@ export const useGameStore = create<GameState>()(
       },
 
       clearEvolutionReport: () => set({ seasonEvolutionReport: null }),
+      clearPlayerProgressionReport: () => set({ playerProgressionReport: null }),
 
       advanceMatch: () => {
         set((state) => {
           const { player, logs, schedules, standings, teams } = state;
           const weekIndex = player.matchesPlayed % 38;
+          let seasonEntry: SeasonHistory | null = null;
+          let progression: { newOverall: number; newStats: PlayerStats; progressionLog: string | null; logType: 'good' | 'bad' | 'neutral' } | null = null;
+          let newPlayerProgressionReport: PlayerProgressionReport | null = null;
+
+          // Acumulador de stats del jugador para esta jornada
+          const playerStatsUpdate = {
+            goals: 0,
+            assists: 0,
+            ratingSum: 0,
+            appearances: 0,
+            lastMatches: [...(player.lastMatches || [])]
+          };
 
           let eventLogs: EventLog[] = [];
           const newStandings = JSON.parse(JSON.stringify(standings)) as typeof standings;
@@ -338,11 +772,48 @@ export const useGameStore = create<GameState>()(
               }
 
               if (isPlayerMatch) {
+                const teamIsHome = homeId === player.teamId;
+                const teamGoals = teamIsHome ? homeGoals : awayGoals;
+                const opponentGoals = teamIsHome ? awayGoals : homeGoals;
+                const opponentName = teamIsHome ? awayTeam.name : homeTeam.name;
+
+                const opponentStrength = teamIsHome ? awayTeam.strength : homeTeam.strength;
+                const performance = simulatePlayerPerformance(player, teamGoals, opponentGoals, teamIsHome, opponentStrength);
+
+                // Construir texto del log
+                let perfText = '';
+                if (performance.goals > 0) perfText += ` ⚽ ${performance.goals}`;
+                if (performance.assists > 0) perfText += ` 🅰️ ${performance.assists}`;
+                perfText += ` · Rating: ${performance.rating.toFixed(1)}`;
+
+                let logType: EventLog['type'] = 'neutral';
+                if (performance.goals >= 2 || performance.rating >= 8.5) logType = 'good';
+                else if (performance.rating < 5.5) logType = 'bad';
+
                 eventLogs.push({
                   id: Date.now().toString() + Math.random(),
-                  text: `Jornada ${weekIndex + 1}: ${homeTeam.name} ${homeGoals} - ${awayGoals} ${awayTeam.name}`,
-                  type: 'neutral'
+                  text: `Jornada ${weekIndex + 1}: ${homeTeam.name} ${homeGoals} - ${awayGoals} ${awayTeam.name}${perfText}`,
+                  type: logType
                 });
+
+                // Guardar el partido en el historial reciente
+                const matchPerf: MatchPerformance = {
+                  matchNum: (player.careerAppearances || 0) + 1,
+                  age: player.age,
+                  opponent: opponentName,
+                  isHome: teamIsHome,
+                  teamGoals,
+                  opponentGoals,
+                  goals: performance.goals,
+                  assists: performance.assists,
+                  rating: performance.rating,
+                };
+
+                playerStatsUpdate.goals += performance.goals;
+                playerStatsUpdate.assists += performance.assists;
+                playerStatsUpdate.ratingSum += performance.rating;
+                playerStatsUpdate.appearances += 1;
+                playerStatsUpdate.lastMatches = [matchPerf, ...playerStatsUpdate.lastMatches].slice(0, 10);
               }
             });
           });
@@ -550,6 +1021,16 @@ export const useGameStore = create<GameState>()(
             currentAge++;
             eventLogs.push({ id: Date.now().toString() + Math.random(), text: `¡Termina la temporada! Edad: ${currentAge - 1}. Recalculando mundo...`, type: 'info' });
 
+            // Resumen de temporada del jugador
+            if (player.seasonAppearances > 0) {
+              const avgRating = player.seasonRatingSum / player.seasonAppearances;
+              eventLogs.push({
+                id: Date.now().toString() + Math.random(),
+                text: `📊 Tu temporada: ${player.seasonAppearances} partidos, ${player.seasonGoals}G ${player.seasonAssists}A · Rating medio: ${avgRating.toFixed(2)}`,
+                type: avgRating >= 7.5 ? 'good' : 'neutral'
+              });
+            }
+
             // 1. Evaluate Team Evolution based on final Standings
             LEAGUES.forEach(league => {
               const leagueTeams = Object.keys(newStandings[league.id]);
@@ -725,6 +1206,95 @@ export const useGameStore = create<GameState>()(
               }
             });
             newDomesticCupsHistory[currentAge - 1] = currentCupsHistory;
+
+            // === GUARDAR HISTORIAL DE TEMPORADA DEL JUGADOR ===
+            const playerLeagueId = INITIAL_TEAMS.find(t => t.id === player.teamId)?.leagueId;
+
+            let wonLeague = false;
+            if (playerLeagueId && finalSeasonStandings[playerLeagueId]) {
+              const sortedLeague = Object.entries(finalSeasonStandings[playerLeagueId])
+                .map(([id, st]) => ({ id, ...(st as StandingRecord) }))
+                .sort((a, b) => {
+                  if (b.points !== a.points) return b.points - a.points;
+                  return (b.goalsFor - b.goalsAgainst) - (a.goalsFor - a.goalsAgainst);
+                });
+              wonLeague = sortedLeague[0]?.id === player.teamId;
+            }
+
+            const wonDomesticCup = playerLeagueId
+              ? newDomesticCups[playerLeagueId]?.champion === player.teamId
+              : false;
+
+            const wonChampions = newChampions.champion === player.teamId;
+
+            // Para mundial y eurocopa: solo cuenta si se jugó ESE año
+            const wonWorldCupThisYear = ((currentAge - 15) % 4 === 0) &&
+              newWorldCupHistory[currentAge - 1]?.winnerId === player.country;
+            const wonEuroCupThisYear = ((currentAge - 17) % 4 === 0) &&
+              newEuroCupHistory[currentAge - 1]?.winnerId === player.country;
+
+            const seasonTeamName = newTeams[player.teamId]?.name || 'Desconocido';
+            const avgRating = player.seasonAppearances > 0
+              ? Math.round((player.seasonRatingSum / player.seasonAppearances) * 100) / 100
+              : 0;
+
+            seasonEntry = {
+              age: currentAge - 1, // la edad que tenía durante la temporada recién terminada
+              teamId: player.teamId,
+              teamName: seasonTeamName,
+              appearances: player.seasonAppearances || 0,
+              goals: player.seasonGoals || 0,
+              assists: player.seasonAssists || 0,
+              avgRating,
+              trophies: {
+                league: wonLeague,
+                domesticCup: wonDomesticCup,
+                champions: wonChampions,
+                worldCup: wonWorldCupThisYear,
+                euroCup: wonEuroCupThisYear,
+              },
+            };
+
+            // Logs de trofeos ganados
+            if (wonLeague) eventLogs.push({ id: Date.now().toString() + Math.random(), text: `🏆 ¡Has ganado la liga con ${seasonTeamName}!`, type: 'good' });
+            if (wonDomesticCup) eventLogs.push({ id: Date.now().toString() + Math.random(), text: `🏆 ¡Has ganado la copa nacional con ${seasonTeamName}!`, type: 'good' });
+            if (wonChampions) eventLogs.push({ id: Date.now().toString() + Math.random(), text: `🌟 ¡CAMPEÓN DE LA CHAMPIONS LEAGUE con ${seasonTeamName}!`, type: 'good' });
+            if (wonWorldCupThisYear) eventLogs.push({ id: Date.now().toString() + Math.random(), text: `👑 ¡CAMPEÓN DEL MUNDO con tu selección!`, type: 'good' });
+            if (wonEuroCupThisYear) eventLogs.push({ id: Date.now().toString() + Math.random(), text: `👑 ¡CAMPEÓN DE EUROPA con tu selección!`, type: 'good' });
+
+            // === PROGRESIÓN DEL JUGADOR (overall y stats según edad/rendimiento) ===
+            const oldOverallForReport = player.overall;
+            const oldStatsForReport = { ...player.stats };
+
+            progression = updatePlayerProgression({
+              ...player,
+              age: currentAge - 1, // edad durante la temporada recién terminada
+            });
+
+            if (progression.progressionLog) {
+              eventLogs.push({
+                id: Date.now().toString() + Math.random(),
+                text: progression.progressionLog,
+                type: progression.logType
+              });
+            }
+
+            // Guardar el reporte de progresión para mostrarlo en la UI
+            const seasonAvgRatingForReport = player.seasonAppearances > 0
+              ? player.seasonRatingSum / player.seasonAppearances
+              : 0;
+
+            newPlayerProgressionReport = {
+              oldOverall: oldOverallForReport,
+              newOverall: progression.newOverall,
+              oldStats: oldStatsForReport,
+              newStats: progression.newStats,
+              seasonGoals: player.seasonGoals || 0,
+              seasonAssists: player.seasonAssists || 0,
+              seasonAppearances: player.seasonAppearances || 0,
+              seasonAvgRating: Math.round(seasonAvgRatingForReport * 100) / 100,
+              age: currentAge - 1,
+            };
 
             // Bonus de fortaleza para el campeón de la Champions (atrae jugadores top)
             if (newChampions.champion && newTeams[newChampions.champion]) {
@@ -911,8 +1481,27 @@ export const useGameStore = create<GameState>()(
             }
           }
 
+          const isEndOfSeason = matchesPlayed % 38 === 0;
+
           return {
-            player: { ...player, matchesPlayed, age: currentAge },
+            player: {
+              ...player,
+              matchesPlayed,
+              age: currentAge,
+              careerGoals: (player.careerGoals || 0) + playerStatsUpdate.goals,
+              careerAssists: (player.careerAssists || 0) + playerStatsUpdate.assists,
+              careerAppearances: (player.careerAppearances || 0) + playerStatsUpdate.appearances,
+              seasonGoals: isEndOfSeason ? 0 : ((player.seasonGoals || 0) + playerStatsUpdate.goals),
+              seasonAssists: isEndOfSeason ? 0 : ((player.seasonAssists || 0) + playerStatsUpdate.assists),
+              seasonAppearances: isEndOfSeason ? 0 : ((player.seasonAppearances || 0) + playerStatsUpdate.appearances),
+              seasonRatingSum: isEndOfSeason ? 0 : ((player.seasonRatingSum || 0) + playerStatsUpdate.ratingSum),
+              overall: progression ? progression.newOverall : player.overall,
+              stats: progression ? progression.newStats : player.stats,
+              lastMatches: playerStatsUpdate.lastMatches,
+              seasonsHistory: (isEndOfSeason && seasonEntry)
+                ? [...(player.seasonsHistory || []), seasonEntry]
+                : (player.seasonsHistory || []),
+            },
             teams: newTeams,
             standings: newStandings,
             schedules: schedules,
@@ -922,6 +1511,7 @@ export const useGameStore = create<GameState>()(
             worldCupHistory: newWorldCupHistory,
             euroCupHistory: newEuroCupHistory,
             seasonEvolutionReport: newEvolutionReport,
+            playerProgressionReport: newPlayerProgressionReport,
             champions: newChampions,
             domesticCups: newDomesticCups,
             nationalTeams: newNationalTeams,
@@ -953,6 +1543,10 @@ export const useGameStore = create<GameState>()(
 
       createPlayer: async (name, country, position, teamId) => {
         await AsyncStorage.removeItem('footballerlife-storage');
+        const clubStrength = INITIAL_TEAMS.find(t => t.id === teamId)?.strength || 75;
+        const { overall, stats } = generatePlayerStats(position, clubStrength, country);
+        const peakAge = 25 + Math.floor(Math.random() * 5); // 25-29
+
         set({
           ...createInitialWorld(),
           player: {
@@ -962,10 +1556,22 @@ export const useGameStore = create<GameState>()(
             teamId,
             country,
             position,
+            overall,
+            stats,
+            careerGoals: 0,
+            careerAssists: 0,
+            careerAppearances: 0,
+            seasonGoals: 0,
+            seasonAssists: 0,
+            seasonAppearances: 0,
+            seasonRatingSum: 0,
+            lastMatches: [],
+            seasonsHistory: [],
+            peakAge,
           },
           logs: [{
             id: Date.now().toString(),
-            text: `¡Bienvenido ${name}! Comienza tu carrera en el fútbol.`,
+            text: `¡Bienvenido ${name}! Debutas como ${position} con overall ${overall}. Comienza tu carrera.`,
             type: 'info'
           }],
         });
@@ -976,7 +1582,7 @@ export const useGameStore = create<GameState>()(
       storage: createJSONStorage(() => AsyncStorage),
       version: 1,
       partialize: (state) => {
-        const { seasonEvolutionReport, ...rest } = state;
+        const { seasonEvolutionReport, playerProgressionReport, ...rest } = state;
         return rest;
       },
       onRehydrateStorage: () => (state, error) => {

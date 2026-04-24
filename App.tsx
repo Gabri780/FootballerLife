@@ -2,15 +2,17 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, SafeAreaView, Dimensions } from 'react-native';
 import { useGameStore } from './src/store/gameStore';
-import { CalendarClock, FastForward, Trophy, History, Award, Star } from 'lucide-react-native';
+import { CalendarClock, FastForward, Trophy, History, Award, Star, User } from 'lucide-react-native';
 import { StandingsModal } from './src/components/StandingsModal';
 import { HistoryModal } from './src/components/HistoryModal';
 import { EvolutionModal } from './src/components/EvolutionModal';
+import { PlayerProgressionModal } from './src/components/PlayerProgressionModal';
 import { RankingModal } from './src/components/RankingModal';
 import { ChampionsModal } from './src/components/ChampionsModal';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { CreateCharacterScreen } from './src/screens/CreateCharacterScreen';
 import { ChooseClubScreen } from './src/screens/ChooseClubScreen';
+import { ProfileModal } from './src/components/ProfileModal';
 import { TEAMS } from './src/data/leagues';
 
 const { width } = Dimensions.get('window');
@@ -23,6 +25,7 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showRanking, setShowRanking] = useState(false);
   const [showChampions, setShowChampions] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const teamName = TEAMS.find(t => t.id === player.teamId)?.name || 'Club';
 
@@ -67,6 +70,9 @@ export default function App() {
             <Text style={styles.playerSub}>Modo Observador: {teamName} • {player.age} años</Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity style={styles.trophyBtn} onPress={() => setShowProfile(true)}>
+              <User size={20} color="#a3e635" />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.trophyBtn} onPress={() => setShowChampions(true)}>
               <Star size={20} color="#fbbf24" fill="rgba(251, 191, 36, 0.2)" />
             </TouchableOpacity>
@@ -116,6 +122,8 @@ export default function App() {
       <HistoryModal visible={showHistory} onClose={() => setShowHistory(false)} />
       <RankingModal visible={showRanking} onClose={() => setShowRanking(false)} />
       <ChampionsModal visible={showChampions} onClose={() => setShowChampions(false)} />
+      <ProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
+      <PlayerProgressionModal />
       <EvolutionModal />
     </SafeAreaView>
   );
