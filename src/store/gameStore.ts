@@ -108,6 +108,7 @@ export type DynamicTeam = {
   form: number; // -5 to +5
   prestige: number; // 1 to 5
   yearsAtPeak: number; // Para medir ciclos de éxito
+  lastResults: ('W' | 'D' | 'L')[]; // últimos 5 resultados (el primero es el más reciente)
 };
 
 export type ChampionsMatch = {
@@ -176,7 +177,7 @@ interface GameState {
 
   // Actions
   initializePlayer: () => void;
-  advanceMatch: () => void;
+  advanceMatchSilent: () => void;
   advanceSeason: () => Promise<void>;
   clearEvolutionReport: () => void;
   clearPlayerProgressionReport: () => void;
@@ -517,7 +518,7 @@ const createInitialWorld = () => {
 
   INITIAL_TEAMS.forEach(t => {
     const prestige = t.strength >= 88 ? 5 : t.strength >= 83 ? 4 : t.strength >= 78 ? 3 : t.strength >= 72 ? 2 : 1;
-    teams[t.id] = { ...t, form: 0, prestige, yearsAtPeak: 0 };
+    teams[t.id] = { ...t, form: 0, prestige, yearsAtPeak: 0, lastResults: [] };
   });
 
   LEAGUES.forEach(league => {
@@ -564,7 +565,7 @@ const createInitialWorld = () => {
   const nationalTeams: Record<string, DynamicTeam> = {};
   NATIONAL_TEAMS.forEach(nt => {
     const prestige = nt.strength >= 88 ? 5 : nt.strength >= 83 ? 4 : nt.strength >= 78 ? 3 : nt.strength >= 72 ? 2 : 1;
-    nationalTeams[nt.id] = { id: nt.id, name: nt.name, leagueId: 'world', strength: nt.strength, form: 0, prestige, yearsAtPeak: 0 };
+    nationalTeams[nt.id] = { id: nt.id, name: nt.name, leagueId: 'world', strength: nt.strength, form: 0, prestige, yearsAtPeak: 0, lastResults: [] };
   });
 
   return { schedules, standings, teams, history: {}, championsHistory, domesticCupsHistory, worldCupHistory: {}, euroCupHistory: {}, seasonEvolutionReport: null, playerProgressionReport: null, champions, domesticCups, nationalTeams };
@@ -706,7 +707,7 @@ export const useGameStore = create<GameState>()(
       clearEvolutionReport: () => set({ seasonEvolutionReport: null }),
       clearPlayerProgressionReport: () => set({ playerProgressionReport: null }),
 
-      advanceMatch: () => {
+      advanceMatchSilent: () => {
         set((state) => {
           const { player, logs, schedules, standings, teams } = state;
           const weekIndex = player.matchesPlayed % 38;
@@ -759,16 +760,22 @@ export const useGameStore = create<GameState>()(
                 hs.won++; hs.points += 3; as.lost++;
                 homeTeam.form = clampForm(homeTeam.form + 1);
                 awayTeam.form = clampForm(awayTeam.form - 1);
+                homeTeam.lastResults = ['W', ...(homeTeam.lastResults || [])].slice(0, 5);
+                awayTeam.lastResults = ['L', ...(awayTeam.lastResults || [])].slice(0, 5);
               } else if (homeGoals < awayGoals) {
                 as.won++; as.points += 3; hs.lost++;
                 awayTeam.form = clampForm(awayTeam.form + 1);
                 homeTeam.form = clampForm(homeTeam.form - 1);
+                homeTeam.lastResults = ['L', ...(homeTeam.lastResults || [])].slice(0, 5);
+                awayTeam.lastResults = ['W', ...(awayTeam.lastResults || [])].slice(0, 5);
               } else {
                 hs.drawn++; as.drawn++;
                 hs.points += 1; as.points += 1;
                 // Form slowly rots towards 0 on draws
                 if (homeTeam.form > 0) homeTeam.form--; else if (homeTeam.form < 0) homeTeam.form++;
                 if (awayTeam.form > 0) awayTeam.form--; else if (awayTeam.form < 0) awayTeam.form++;
+                homeTeam.lastResults = ['D', ...(homeTeam.lastResults || [])].slice(0, 5);
+                awayTeam.lastResults = ['D', ...(awayTeam.lastResults || [])].slice(0, 5);
               }
 
               if (isPlayerMatch) {
@@ -1049,6 +1056,7 @@ export const useGameStore = create<GameState>()(
                 const team = newTeams[id];
                 const oldStrength = team.strength;
                 team.form = 0; // Reset form
+                team.lastResults = [];
 
                 const isTop4 = index < 4;
                 const isTop2 = index < 2;
@@ -1523,7 +1531,7 @@ export const useGameStore = create<GameState>()(
       advanceSeason: async () => {
         for (let i = 0; i < 38; i++) {
           await new Promise(resolve => setTimeout(resolve, 0));
-          get().advanceMatch();
+          get().advanceMatchSilent();
         }
       },
 

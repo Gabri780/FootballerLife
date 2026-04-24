@@ -13,14 +13,28 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { CreateCharacterScreen } from './src/screens/CreateCharacterScreen';
 import { ChooseClubScreen } from './src/screens/ChooseClubScreen';
 import { ProfileModal } from './src/components/ProfileModal';
-import { TEAMS } from './src/data/leagues';
+import { MatchPreviewScreen } from './src/screens/MatchPreviewScreen';
+import { MatchLiveScreen } from './src/screens/MatchLiveScreen';
+import { MatchResultScreen } from './src/screens/MatchResultScreen';
+import { TEAMS, LEAGUES } from './src/data/leagues';
 
 const { width } = Dimensions.get('window');
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<'home' | 'create' | 'club' | 'game'>('home');
+  const [currentScreen, setCurrentScreen] = useState<'home' | 'create' | 'club' | 'game' | 'matchPreview' | 'matchLive' | 'matchResult'>('home');
   const [pendingPlayer, setPendingPlayer] = useState<{ name: string, country: string, position: string } | null>(null);
-  const { player, logs, advanceMatch, advanceSeason, createPlayer } = useGameStore();
+  const [matchResultData, setMatchResultData] = useState<{
+    homeGoals: number;
+    awayGoals: number;
+    homeId: string;
+    awayId: string;
+    homeName: string;
+    awayName: string;
+    playerGoals: number;
+    playerAssists: number;
+    playerRating: number;
+  } | null>(null);
+  const { player, logs, advanceMatchSilent, advanceSeason, createPlayer } = useGameStore();
   const [showStandings, setShowStandings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showRanking, setShowRanking] = useState(false);
@@ -28,6 +42,48 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false);
 
   const teamName = TEAMS.find(t => t.id === player.teamId)?.name || 'Club';
+
+  const handlePlayMatch = () => {
+    const storeState = useGameStore.getState();
+    const weekIndex = storeState.player.matchesPlayed % 38;
+
+    // Encontrar el partido del jugador ANTES de avanzar
+    let homeId = '';
+    let awayId = '';
+    for (const league of LEAGUES) {
+      const wm = storeState.schedules[league.id]?.[weekIndex];
+      if (!wm) continue;
+      const m = wm.find(x => x.homeTeamId === storeState.player.teamId || x.awayTeamId === storeState.player.teamId);
+      if (m) {
+        homeId = m.homeTeamId;
+        awayId = m.awayTeamId;
+        break;
+      }
+    }
+
+    const statsBefore = {
+      goals: storeState.player.seasonGoals || 0,
+      assists: storeState.player.seasonAssists || 0,
+      ratingSum: storeState.player.seasonRatingSum || 0,
+      appearances: storeState.player.seasonAppearances || 0,
+    };
+
+    advanceMatchSilent();
+
+    const statsAfter = useGameStore.getState().player;
+    const playerGoals = (statsAfter.seasonGoals || 0) - statsBefore.goals;
+    const playerAssists = (statsAfter.seasonAssists || 0) - statsBefore.assists;
+    const appearancesAdded = (statsAfter.seasonAppearances || 0) - statsBefore.appearances;
+    const playerRating = appearancesAdded > 0
+      ? ((statsAfter.seasonRatingSum || 0) - statsBefore.ratingSum) / appearancesAdded
+      : 0;
+
+    const latestMatch = statsAfter.lastMatches?.[0];
+    const homeGoals = latestMatch ? (latestMatch.isHome ? latestMatch.teamGoals : latestMatch.opponentGoals) : 0;
+    const awayGoals = latestMatch ? (latestMatch.isHome ? latestMatch.opponentGoals : latestMatch.teamGoals) : 0;
+
+    return { playerGoals, playerAssists, playerRating, homeId, awayId, homeGoals, awayGoals };
+  };
 
   if (currentScreen === 'home') {
     return <HomeScreen
@@ -53,6 +109,55 @@ export default function App() {
       onConfirm={async (teamId) => {
         await createPlayer(pendingPlayer.name, pendingPlayer.country, pendingPlayer.position, teamId);
         setPendingPlayer(null);
+        setCurrentScreen('game');
+      }}
+    />;
+  }
+
+  if (currentScreen === 'matchPreview') {
+    return <MatchPreviewScreen
+      onBack={() => setCurrentScreen('game')}
+      onPlay={() => {
+        const result = handlePlayMatch();
+        const teams = useGameStore.getState().teams;
+
+        if (result.homeId === '') {
+          setCurrentScreen('game');
+          return;
+        }
+
+        setMatchResultData({
+          homeGoals: result.homeGoals,
+          awayGoals: result.awayGoals,
+          homeId: result.homeId,
+          awayId: result.awayId,
+          homeName: teams[result.homeId]?.name || 'Local',
+          awayName: teams[result.awayId]?.name || 'Visitante',
+          playerGoals: result.playerGoals,
+          playerAssists: result.playerAssists,
+          playerRating: result.playerRating,
+        });
+        setCurrentScreen('matchLive');
+      }}
+    />;
+  }
+
+  if (currentScreen === 'matchLive' && matchResultData) {
+    return <MatchLiveScreen
+      finalHomeGoals={matchResultData.homeGoals}
+      finalAwayGoals={matchResultData.awayGoals}
+      homeName={matchResultData.homeName}
+      awayName={matchResultData.awayName}
+      onBack={() => setCurrentScreen('game')}
+      onFinish={() => setCurrentScreen('matchResult')}
+    />;
+  }
+
+  if (currentScreen === 'matchResult' && matchResultData) {
+    return <MatchResultScreen
+      matchResult={matchResultData}
+      onContinue={() => {
+        setMatchResultData(null);
         setCurrentScreen('game');
       }}
     />;
@@ -106,7 +211,7 @@ export default function App() {
       {/* FOOTER: Actions */}
       <View style={styles.footer}>
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.secondaryActionBtn} onPress={advanceMatch}>
+          <TouchableOpacity style={styles.secondaryActionBtn} onPress={() => setCurrentScreen('matchPreview')}>
             <CalendarClock size={24} color="#a1a1aa" style={{ marginRight: 8 }} />
             <Text style={styles.secondaryActionText}>JORNADA</Text>
           </TouchableOpacity>
